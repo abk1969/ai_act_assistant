@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
+import { AiSystem, GeneratedDocument } from "@shared/schema";
 import { 
   FileText, 
   Shield, 
@@ -22,11 +23,11 @@ export default function Documents() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
-  const { data: documents, isLoading } = useQuery({
+  const { data: documents, isLoading } = useQuery<GeneratedDocument[]>({
     queryKey: ['/api/documents'],
   });
 
-  const { data: aiSystems } = useQuery({
+  const { data: aiSystems } = useQuery<AiSystem[]>({
     queryKey: ['/api/ai-systems'],
   });
 

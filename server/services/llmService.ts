@@ -116,12 +116,19 @@ class LLMService {
     }
     messages.push({ role: "user", content: prompt });
 
-    const response = await this.openaiClient.chat.completions.create({
+    // Build request parameters - GPT-5 only supports default temperature (1)
+    const requestParams: any = {
       model: config.model,
       messages,
-      temperature: config.temperature || 0.3,
       max_completion_tokens: options?.maxTokens || 2000,
-    });
+    };
+
+    // Only set temperature for models that support it (not GPT-5)
+    if (config.model !== 'gpt-5' && config.temperature !== undefined) {
+      requestParams.temperature = config.temperature;
+    }
+
+    const response = await this.openaiClient.chat.completions.create(requestParams);
 
     return {
       content: response.choices[0].message.content || '',

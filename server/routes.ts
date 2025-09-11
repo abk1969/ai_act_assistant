@@ -199,6 +199,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       let documents;
       if (systemId) {
+        // SECURITY: Verify system ownership before getting documents
+        const aiSystem = await storage.getAiSystem(systemId as string);
+        if (!aiSystem || aiSystem.userId !== userId) {
+          return res.status(403).json({ message: "Access denied" });
+        }
         documents = await storage.getDocumentsBySystem(systemId as string);
       } else {
         documents = await storage.getDocumentsByUser(userId);
@@ -216,12 +221,163 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const userId = req.user.claims.sub;
       const { systemId, documentType, title } = req.body;
       
-      // Generate document content using LLM
-      const prompt = `Générez un document de type "${documentType}" pour le système IA spécifié. Le document doit être conforme au Règlement (UE) 2024/1689 et rédigé en français professionnel.`;
+      // Get AI system details and risk assessments for context
+      const aiSystem = await storage.getAiSystem(systemId);
+      if (!aiSystem) {
+        return res.status(404).json({ message: "AI System not found" });
+      }
+      
+      // CRITICAL SECURITY: Verify ownership
+      if (aiSystem.userId !== userId) {
+        return res.status(403).json({ message: "Access denied - you can only generate documents for your own AI systems" });
+      }
+      
+      const riskAssessments = await storage.getRiskAssessmentsBySystem(systemId);
+      const latestAssessment = riskAssessments?.[0]; // Get most recent
+      
+      // Build comprehensive context for document generation
+      const contextData = {
+        systemName: aiSystem.name,
+        description: aiSystem.description,
+        sector: aiSystem.sector,
+        riskLevel: aiSystem.riskLevel || 'not_assessed',
+        complianceScore: aiSystem.complianceScore,
+        lastAssessed: aiSystem.lastAssessed,
+        assessmentData: latestAssessment ? {
+          riskScore: latestAssessment.riskScore,
+          riskLevel: latestAssessment.riskLevel,
+          formData: latestAssessment.formData,
+          recommendations: latestAssessment.recommendations
+        } : null
+      };
+      
+      // Generate specialized prompts based on document type
+      let prompt = "";
+      let systemPrompt = "Vous êtes un expert en conformité réglementaire EU AI Act (Règlement UE 2024/1689). Générez des documents professionnels, conformes et détaillés en français.";
+      
+      switch (documentType) {
+        case 'technical_documentation':
+          prompt = `Générez une DOCUMENTATION TECHNIQUE complète conforme à l'Article 11 du Règlement EU AI Act pour le système IA suivant:
+
+SYSTÈME IA: ${contextData.systemName}
+DESCRIPTION: ${contextData.description}
+SECTEUR: ${contextData.sector}
+NIVEAU DE RISQUE: ${contextData.riskLevel}
+SCORE DE CONFORMITÉ: ${contextData.complianceScore || 'Non évalué'}
+
+${contextData.assessmentData ? `DERNIÈRE ÉVALUATION:
+- Score de risque: ${contextData.assessmentData.riskScore}/100
+- Niveau de risque: ${contextData.assessmentData.riskLevel}
+- Recommandations: ${JSON.stringify(contextData.assessmentData.recommendations)}` : ''}
+
+Le document doit inclure:
+1. Description générale du système d'IA et de sa finalité prévue
+2. Les éléments du système et du processus de développement 
+3. Surveillance, fonctionnement et contrôle du système d'IA
+4. Gestion des risques et mesures de mitigation
+5. Jeux de données d'entraînement, de validation et de test
+6. Documentation technique et procédures opérationnelles`;
+          break;
+          
+        case 'impact_assessment':
+          prompt = `Générez une ÉVALUATION D'IMPACT SUR LES DROITS FONDAMENTAUX conforme à l'Article 27 du Règlement EU AI Act:
+
+SYSTÈME IA: ${contextData.systemName}
+DESCRIPTION: ${contextData.description}
+SECTEUR: ${contextData.sector}
+NIVEAU DE RISQUE: ${contextData.riskLevel}
+
+${contextData.assessmentData ? `ÉVALUATION TECHNIQUE EXISTANTE:
+- Score: ${contextData.assessmentData.riskScore}/100
+- Données de formulaire: ${JSON.stringify(contextData.assessmentData.formData)}` : ''}
+
+Le document doit analyser:
+1. Les processus auxquels le système d'IA est destiné à être utilisé
+2. Les catégories de personnes et groupes de personnes susceptibles d'être affectés
+3. Les risques identifiés de préjudices aux droits fondamentaux
+4. L'évaluation détaillée des impacts négatifs
+5. Les mesures de sauvegarde et de mitigation adoptées
+6. La consultation des parties prenantes concernées`;
+          break;
+          
+        case 'conformity_declaration':
+          prompt = `Générez une DÉCLARATION UE DE CONFORMITÉ conforme à l'Article 47 du Règlement EU AI Act:
+
+SYSTÈME IA: ${contextData.systemName}
+DESCRIPTION: ${contextData.description}
+SECTEUR: ${contextData.sector}
+NIVEAU DE RISQUE: ${contextData.riskLevel}
+SCORE DE CONFORMITÉ: ${contextData.complianceScore || 'Non évalué'}
+
+La déclaration doit contenir:
+1. Le nom, la dénomination commerciale du fournisseur et son adresse
+2. La désignation du système d'IA à haut risque  
+3. La déclaration que le système d'IA à haut risque est conforme au règlement
+4. Les références aux normes harmonisées pertinentes appliquées
+5. L'identification de l'organisme notifié (si applicable)
+6. Le lieu et la date de délivrance de la déclaration
+7. La signature du représentant légal`;
+          break;
+          
+        case 'human_oversight_plan':
+          prompt = `Générez un PLAN DE SURVEILLANCE HUMAINE conforme à l'Article 14 du Règlement EU AI Act:
+
+SYSTÈME IA: ${contextData.systemName}
+DESCRIPTION: ${contextData.description}
+SECTEUR: ${contextData.sector}
+
+${contextData.assessmentData?.formData ? `DONNÉES D'ÉVALUATION:
+${JSON.stringify(contextData.assessmentData.formData)}` : ''}
+
+Le plan doit définir:
+1. Les mesures de surveillance humaine appropriées
+2. L'identification des personnes physiques responsables
+3. Les compétences et qualifications requises pour les superviseurs
+4. Les procédures d'intervention en cas de dysfonctionnement
+5. Les modalités de formation et de sensibilisation
+6. La fréquence et les modalités de contrôle du système`;
+          break;
+          
+        case 'usage_instructions':
+          prompt = `Générez des INSTRUCTIONS D'USAGE complètes conformes à l'Article 13 du Règlement EU AI Act:
+
+SYSTÈME IA: ${contextData.systemName}
+DESCRIPTION: ${contextData.description}
+SECTEUR: ${contextData.sector}
+NIVEAU DE RISQUE: ${contextData.riskLevel}
+
+Les instructions doivent inclure:
+1. L'identité et les coordonnées de contact du fournisseur
+2. Les caractéristiques, capacités et limitations de performance
+3. Les modifications apportées au système et leur impact
+4. Les performances attendues et les conditions d'utilisation
+5. Les mesures de surveillance humaine requises
+6. La formation nécessaire pour les utilisateurs déployeurs`;
+          break;
+          
+        case 'incident_register':
+          prompt = `Générez un REGISTRE DES INCIDENTS ET TEMPLATE DE SIGNALEMENT conforme à l'Article 62 du Règlement EU AI Act:
+
+SYSTÈME IA: ${contextData.systemName}
+DESCRIPTION: ${contextData.description}
+SECTEUR: ${contextData.sector}
+
+Le registre doit contenir:
+1. Template de signalement d'incident normalisé
+2. Procédures de détection et classification des dysfonctionnements
+3. Critères de gravité et d'urgence de signalement
+4. Processus de notification aux autorités compétentes
+5. Mesures correctives et préventives à adopter
+6. Suivi et documentation des incidents`;
+          break;
+          
+        default:
+          prompt = `Générez un document de conformité EU AI Act de type "${documentType}" pour le système "${contextData.systemName}".`;
+      }
       
       const response = await llmService.generateResponse(prompt, userId, {
-        systemPrompt: "Vous êtes un expert en conformité réglementaire EU AI Act. Générez des documents professionnels et conformes.",
-        maxTokens: 3000
+        systemPrompt,
+        maxTokens: 4000
       });
       
       const document = await storage.createGeneratedDocument({

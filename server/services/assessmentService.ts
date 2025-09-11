@@ -209,16 +209,42 @@ class AssessmentService {
       }
     }`;
 
+    let response = null;
     try {
-      const response = await llmService.generateResponse(prompt, userId, {
+      response = await llmService.generateResponse(prompt, userId, {
         systemPrompt,
         maxTokens: 2000
       });
 
-      const parsed = JSON.parse(response.content);
+      console.log('LLM response content:', response.content); // Debug log
+      
+      // Validate response content
+      if (!response.content || response.content.trim().length === 0) {
+        console.error('Empty LLM response received');
+        return this.getFallbackAssessment(riskLevel, formData);
+      }
+
+      // Try to extract JSON from the response (LLM might wrap it in text)
+      let jsonContent = response.content.trim();
+      
+      // Find JSON block if wrapped in code blocks or other text
+      const jsonMatch = jsonContent.match(/\{[\s\S]*\}/);
+      if (jsonMatch) {
+        jsonContent = jsonMatch[0];
+      }
+
+      const parsed = JSON.parse(jsonContent);
+      
+      // Validate structure
+      if (!parsed.reasoning || !parsed.recommendations || !parsed.timeline) {
+        console.error('Invalid LLM response structure:', parsed);
+        return this.getFallbackAssessment(riskLevel, formData);
+      }
+      
       return parsed;
     } catch (error) {
       console.error('AI assessment generation failed:', error);
+      console.log('Raw LLM response:', response?.content || 'No response content');
       
       // Fallback to predefined assessment
       return this.getFallbackAssessment(riskLevel, formData);
