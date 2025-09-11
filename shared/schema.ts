@@ -42,6 +42,9 @@ export const riskLevelEnum = pgEnum('risk_level', ['minimal', 'limited', 'high',
 // AI system status enum
 export const systemStatusEnum = pgEnum('system_status', ['draft', 'active', 'archived', 'non_compliant']);
 
+// Maturity levels enum for organizational assessment
+export const maturityLevelEnum = pgEnum('maturity_level', ['initial', 'developing', 'defined', 'managed', 'optimizing']);
+
 // AI systems table
 export const aiSystems = pgTable("ai_systems", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
@@ -138,6 +141,21 @@ export const llmSettings = pgTable("llm_settings", {
   updatedAt: timestamp("updated_at").defaultNow(),
 });
 
+// Organizational maturity assessments table
+export const maturityAssessments = pgTable("maturity_assessments", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  userId: varchar("user_id").notNull().references(() => users.id),
+  organizationName: varchar("organization_name").notNull(),
+  assessmentData: jsonb("assessment_data").notNull(),
+  overallMaturity: maturityLevelEnum("overall_maturity"),
+  domainScores: jsonb("domain_scores"), // AI Strategy, Governance, Ethics, Risk Management, etc.
+  recommendations: jsonb("recommendations"),
+  actionPlan: jsonb("action_plan"),
+  overallScore: integer("overall_score"), // 0-100
+  completedAt: timestamp("completed_at").defaultNow(),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
 // Relations
 export const usersRelations = relations(users, ({ many }) => ({
   aiSystems: many(aiSystems),
@@ -145,6 +163,7 @@ export const usersRelations = relations(users, ({ many }) => ({
   complianceRecords: many(complianceRecords),
   generatedDocuments: many(generatedDocuments),
   llmSettings: many(llmSettings),
+  maturityAssessments: many(maturityAssessments),
 }));
 
 export const aiSystemsRelations = relations(aiSystems, ({ one, many }) => ({
@@ -183,6 +202,13 @@ export const complianceRecordsRelations = relations(complianceRecords, ({ one })
   }),
 }));
 
+export const maturityAssessmentsRelations = relations(maturityAssessments, ({ one }) => ({
+  user: one(users, {
+    fields: [maturityAssessments.userId],
+    references: [users.id],
+  }),
+}));
+
 // Insert schemas
 export const insertUserSchema = createInsertSchema(users).omit({
   id: true,
@@ -218,6 +244,12 @@ export const insertLlmSettingsSchema = createInsertSchema(llmSettings).omit({
   updatedAt: true,
 });
 
+export const insertMaturityAssessmentSchema = createInsertSchema(maturityAssessments).omit({
+  id: true,
+  completedAt: true,
+  createdAt: true,
+});
+
 // Types
 export type UpsertUser = typeof users.$inferInsert;
 export type User = typeof users.$inferSelect;
@@ -233,3 +265,5 @@ export type InsertGeneratedDocument = z.infer<typeof insertGeneratedDocumentSche
 export type RegulatoryUpdate = typeof regulatoryUpdates.$inferSelect;
 export type LlmSettings = typeof llmSettings.$inferSelect;
 export type InsertLlmSettings = z.infer<typeof insertLlmSettingsSchema>;
+export type MaturityAssessment = typeof maturityAssessments.$inferSelect;
+export type InsertMaturityAssessment = z.infer<typeof insertMaturityAssessmentSchema>;

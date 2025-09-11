@@ -6,6 +6,7 @@ import { assessmentService } from "./services/assessmentService";
 import { complianceService } from "./services/complianceService";
 import { regulatoryService } from "./services/regulatoryService";
 import { llmService } from "./services/llmService";
+import { maturityService } from "./services/maturityService";
 import { insertAiSystemSchema, insertRiskAssessmentSchema, insertLlmSettingsSchema } from "@shared/schema";
 import { z } from "zod";
 
@@ -115,6 +116,49 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("Error fetching assessments:", error);
       res.status(500).json({ message: "Failed to fetch assessments" });
+    }
+  });
+
+  // Maturity Assessment routes
+  app.get('/api/maturity/framework', async (req, res) => {
+    try {
+      const framework = maturityService.getMaturityFramework();
+      res.json(framework);
+    } catch (error) {
+      console.error("Error fetching maturity framework:", error);
+      res.status(500).json({ message: "Failed to fetch maturity framework" });
+    }
+  });
+
+  app.post('/api/maturity/assessments', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const formData = req.body;
+      
+      // Perform maturity assessment
+      const result = await maturityService.assessOrganizationalMaturity(formData, userId);
+      
+      // Save assessment
+      const saved = await maturityService.saveMaturityAssessment(formData, result, userId);
+      
+      res.status(201).json({
+        ...result,
+        assessmentId: saved.assessmentId
+      });
+    } catch (error) {
+      console.error("Error performing maturity assessment:", error);
+      res.status(500).json({ message: "Failed to perform maturity assessment" });
+    }
+  });
+
+  app.get('/api/maturity/assessments', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const assessments = await storage.getMaturityAssessmentsByUser(userId);
+      res.json(assessments);
+    } catch (error) {
+      console.error("Error fetching maturity assessments:", error);
+      res.status(500).json({ message: "Failed to fetch maturity assessments" });
     }
   });
 

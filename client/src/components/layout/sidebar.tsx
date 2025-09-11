@@ -4,6 +4,7 @@ import { cn } from "@/lib/utils";
 import {
   BarChart3,
   ClipboardCheck,
+  TrendingUp,
   Database,
   Shield,
   FileText,
@@ -26,6 +27,11 @@ const navigationItems = [
     name: "Évaluation des risques",
     href: "/assessment",
     icon: ClipboardCheck,
+  },
+  {
+    name: "Maturité organisationnelle",
+    href: "/maturity",
+    icon: TrendingUp,
   },
   {
     name: "Base réglementaire",

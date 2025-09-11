@@ -7,6 +7,7 @@ import {
   generatedDocuments,
   regulatoryUpdates,
   llmSettings,
+  maturityAssessments,
   type User,
   type UpsertUser,
   type AiSystem,
@@ -21,6 +22,8 @@ import {
   type RegulatoryUpdate,
   type LlmSettings,
   type InsertLlmSettings,
+  type MaturityAssessment,
+  type InsertMaturityAssessment,
 } from "@shared/schema";
 import { db } from "./db";
 import { eq, desc, and, sql, ilike } from "drizzle-orm";
@@ -71,6 +74,11 @@ export interface IStorage {
   getLlmSettings(userId: string): Promise<LlmSettings[]>;
   upsertLlmSettings(settings: InsertLlmSettings): Promise<LlmSettings>;
   getActiveLlmSettings(userId: string): Promise<LlmSettings | undefined>;
+
+  // Maturity Assessments
+  createMaturityAssessment(assessment: InsertMaturityAssessment): Promise<MaturityAssessment>;
+  getMaturityAssessmentsByUser(userId: string): Promise<MaturityAssessment[]>;
+  getLatestMaturityAssessment(userId: string): Promise<MaturityAssessment | undefined>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -297,6 +305,30 @@ export class DatabaseStorage implements IStorage {
       .where(and(eq(llmSettings.userId, userId), eq(llmSettings.isActive, true)))
       .limit(1);
     return settings;
+  }
+
+  // Maturity Assessments
+  async createMaturityAssessment(assessment: InsertMaturityAssessment): Promise<MaturityAssessment> {
+    const [result] = await db.insert(maturityAssessments).values(assessment).returning();
+    return result;
+  }
+
+  async getMaturityAssessmentsByUser(userId: string): Promise<MaturityAssessment[]> {
+    return await db
+      .select()
+      .from(maturityAssessments)
+      .where(eq(maturityAssessments.userId, userId))
+      .orderBy(desc(maturityAssessments.completedAt));
+  }
+
+  async getLatestMaturityAssessment(userId: string): Promise<MaturityAssessment | undefined> {
+    const [assessment] = await db
+      .select()
+      .from(maturityAssessments)
+      .where(eq(maturityAssessments.userId, userId))
+      .orderBy(desc(maturityAssessments.completedAt))
+      .limit(1);
+    return assessment;
   }
 }
 

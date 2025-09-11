@@ -7,6 +7,7 @@ import { useAuth } from "@/hooks/useAuth";
 import Landing from "@/pages/landing";
 import Home from "@/pages/home";
 import Assessment from "@/pages/assessment";
+import Maturity from "@/pages/maturity";
 import Database from "@/pages/database";
 import Compliance from "@/pages/compliance";
 import Documents from "@/pages/documents";
@@ -26,6 +27,7 @@ function Router() {
         <MainLayout>
           <Route path="/" component={Home} />
           <Route path="/assessment" component={Assessment} />
+          <Route path="/maturity" component={Maturity} />
           <Route path="/database" component={Database} />
           <Route path="/compliance" component={Compliance} />
           <Route path="/documents" component={Documents} />
