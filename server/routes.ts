@@ -21,6 +21,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const userId = req.user.claims.sub;
       const user = await storage.getUser(userId);
+      
+      // Initialize LLM configurations from environment variables if not already done
+      const existingSettings = await storage.getLlmSettings(userId);
+      if (existingSettings.length === 0) {
+        await llmService.initializeFromEnvironment(userId);
+      }
+      
       res.json(user);
     } catch (error) {
       console.error("Error fetching user:", error);

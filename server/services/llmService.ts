@@ -120,7 +120,7 @@ class LLMService {
       model: config.model,
       messages,
       temperature: config.temperature || 0.3,
-      max_tokens: options?.maxTokens || 2000,
+      max_completion_tokens: options?.maxTokens || 2000,
     });
 
     return {
@@ -247,6 +247,44 @@ class LLMService {
       content: data.choices[0].message.content || '',
       usage: data.usage,
     };
+  }
+
+  async initializeFromEnvironment(userId: string): Promise<void> {
+    try {
+      const envConfigs = [
+        {
+          provider: 'openai',
+          apiKey: process.env.OPENAI_API_KEY,
+          model: 'gpt-5'
+        },
+        {
+          provider: 'google',
+          apiKey: process.env.GEMINI_API_KEY,
+          model: 'gemini-2.5-flash'
+        },
+        {
+          provider: 'anthropic',
+          apiKey: process.env.ANTHROPIC_API_KEY,
+          model: 'claude-sonnet-4-20250514'
+        }
+      ];
+
+      for (const config of envConfigs) {
+        if (config.apiKey) {
+          await storage.upsertLlmSettings({
+            userId,
+            provider: config.provider,
+            model: config.model,
+            apiKey: config.apiKey,
+            temperature: 30,
+            isActive: true
+          });
+          console.log(`Initialized ${config.provider} LLM configuration for user ${userId}`);
+        }
+      }
+    } catch (error) {
+      console.error('Error initializing LLM configurations:', error);
+    }
   }
 
   async testConnection(userId: string, provider: string): Promise<boolean> {

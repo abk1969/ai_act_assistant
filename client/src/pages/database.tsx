@@ -9,7 +9,7 @@ import { Search, Ban, AlertTriangle, Eye, Calendar, Book } from "lucide-react";
 
 export default function Database() {
   const [searchQuery, setSearchQuery] = useState("");
-  const [selectedCategory, setSelectedCategory] = useState("");
+  const [selectedCategory, setSelectedCategory] = useState("all");
 
   const { data: articles, isLoading } = useQuery({
     queryKey: ['/api/ai-act/articles', { search: searchQuery, category: selectedCategory }],
@@ -102,7 +102,7 @@ export default function Database() {
                   <SelectValue placeholder="Tous les chapitres" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="">Tous les chapitres</SelectItem>
+                  <SelectItem value="all">Tous les chapitres</SelectItem>
                   <SelectItem value="prohibited">Chapitre II - Pratiques interdites</SelectItem>
                   <SelectItem value="high_risk">Chapitre III - Systèmes à haut risque</SelectItem>
                   <SelectItem value="transparency">Chapitre IV - Transparence</SelectItem>

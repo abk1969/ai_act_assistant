@@ -17,8 +17,8 @@ import {
 } from "lucide-react";
 
 export default function Monitoring() {
-  const [selectedSource, setSelectedSource] = useState("");
-  const [selectedSeverity, setSelectedSeverity] = useState("");
+  const [selectedSource, setSelectedSource] = useState("all");
+  const [selectedSeverity, setSelectedSeverity] = useState("all");
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
@@ -158,7 +158,7 @@ export default function Monitoring() {
                   <SelectValue placeholder="Toutes sources" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="">Toutes sources</SelectItem>
+                  <SelectItem value="all">Toutes sources</SelectItem>
                   <SelectItem value="Commission Européenne">Commission Européenne</SelectItem>
                   <SelectItem value="DGCCRF">DGCCRF</SelectItem>
                   <SelectItem value="CNIL">CNIL</SelectItem>
@@ -171,7 +171,7 @@ export default function Monitoring() {
                   <SelectValue placeholder="Toutes" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="">Toutes</SelectItem>
+                  <SelectItem value="all">Toutes</SelectItem>
                   <SelectItem value="critique">Critique</SelectItem>
                   <SelectItem value="important">Important</SelectItem>
                   <SelectItem value="info">Info</SelectItem>
