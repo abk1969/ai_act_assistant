@@ -45,6 +45,70 @@ export const systemStatusEnum = pgEnum('system_status', ['draft', 'active', 'arc
 // Maturity levels enum for organizational assessment
 export const maturityLevelEnum = pgEnum('maturity_level', ['initial', 'developing', 'defined', 'managed', 'optimizing']);
 
+// Positive AI Framework v3.0 dimensions enum
+export const aiFrameworkDimensionEnum = pgEnum('ai_framework_dimension', [
+  'justice_fairness',
+  'transparency_explainability', 
+  'human_ai_interaction',
+  'social_environmental_impact',
+  'responsibility',
+  'data_privacy',
+  'technical_robustness_security'
+]);
+
+// Risk assessment levels for framework dimensions (0 to 4 stars)
+export const frameworkRiskLevelEnum = pgEnum('framework_risk_level', ['none', 'minimal', 'moderate', 'high', 'critical']);
+
+// Industry sectors enum based on EU AI Act and Positive AI framework
+export const industrySectorEnum = pgEnum('industry_sector', [
+  'finance_banking',
+  'healthcare_medical',
+  'education_training',
+  'transportation_automotive',
+  'retail_ecommerce',
+  'manufacturing_industrial',
+  'energy_utilities',
+  'telecommunications',
+  'insurance',
+  'real_estate',
+  'agriculture',
+  'legal_services',
+  'media_entertainment',
+  'government_public_sector',
+  'defense_security',
+  'research_development',
+  'consulting_professional_services',
+  'technology_software',
+  'logistics_supply_chain',
+  'hospitality_tourism',
+  'non_profit',
+  'other'
+]);
+
+// Use case types from Positive AI framework
+export const aiUseCaseEnum = pgEnum('ai_use_case', [
+  'claims_management',
+  'talent_acquisition_recruitment',
+  'pricing_personalization',
+  'marketing_personalization',
+  'customer_service_chatbot',
+  'fraud_detection',
+  'risk_assessment',
+  'decision_support',
+  'predictive_analytics',
+  'image_recognition',
+  'natural_language_processing',
+  'recommendation_systems',
+  'automated_decision_making',
+  'biometric_identification',
+  'content_moderation',
+  'quality_control',
+  'supply_chain_optimization',
+  'medical_diagnosis',
+  'financial_trading',
+  'other'
+]);
+
 // AI systems table
 export const aiSystems = pgTable("ai_systems", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
@@ -141,19 +205,63 @@ export const llmSettings = pgTable("llm_settings", {
   updatedAt: timestamp("updated_at").defaultNow(),
 });
 
-// Organizational maturity assessments table
+// Organizational maturity assessments table (Extended for Positive AI Framework v3.0)
 export const maturityAssessments = pgTable("maturity_assessments", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   userId: varchar("user_id").notNull().references(() => users.id),
   organizationName: varchar("organization_name").notNull(),
+  industrySector: industrySectorEnum("industry_sector"),
+  primaryUseCase: aiUseCaseEnum("primary_use_case"),
   assessmentData: jsonb("assessment_data").notNull(),
+  // Framework v3.0 dimension scores (0-100 each)
+  dimensionScores: jsonb("dimension_scores"), // 7 dimensions with detailed scoring
+  // Risk levels per dimension (for customer and employee impact)
+  customerRiskLevels: jsonb("customer_risk_levels"), // Risk levels for customer-facing AI
+  employeeRiskLevels: jsonb("employee_risk_levels"), // Risk levels for employee-facing AI
+  // Legacy fields (preserved for compatibility)
   overallMaturity: maturityLevelEnum("overall_maturity"),
-  domainScores: jsonb("domain_scores"), // AI Strategy, Governance, Ethics, Risk Management, etc.
+  domainScores: jsonb("domain_scores"), // Legacy: AI Strategy, Governance, Ethics, Risk Management, etc.
   recommendations: jsonb("recommendations"),
   actionPlan: jsonb("action_plan"),
   overallScore: integer("overall_score"), // 0-100
+  // EU AI Act compliance status
+  euAiActCompliance: jsonb("eu_ai_act_compliance"), // Compliance mapping per article
+  complianceGaps: jsonb("compliance_gaps"), // Identified gaps and action items
   completedAt: timestamp("completed_at").defaultNow(),
   createdAt: timestamp("created_at").defaultNow(),
+});
+
+// Framework questions and criteria table (Positive AI v3.0)
+export const frameworkQuestions = pgTable("framework_questions", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  dimension: aiFrameworkDimensionEnum("dimension").notNull(),
+  questionId: varchar("question_id").notNull().unique(), // e.g., "justice_1", "transparency_3" 
+  strategy: text("strategy").notNull(), // Strategy from framework
+  question: text("question").notNull(), // Evaluation question
+  correspondingAction: text("corresponding_action"), // Required action
+  tools: jsonb("tools"), // Suggested tools (array)
+  projectPhase: varchar("project_phase"), // When to implement
+  weight: integer("weight").default(10), // Question weight (1-100)
+  isActive: boolean("is_active").default(true),
+  frameworkVersion: varchar("framework_version").default('3.0'),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+// Use case risk mapping (from Positive AI framework)
+export const useCaseRiskMapping = pgTable("use_case_risk_mapping", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  useCase: aiUseCaseEnum("use_case").notNull(),
+  industrySector: industrySectorEnum("industry_sector"),
+  // Risk levels per dimension (customer and employee)
+  customerRiskLevels: jsonb("customer_risk_levels").notNull(), // 7 dimensions
+  employeeRiskLevels: jsonb("employee_risk_levels").notNull(), // 7 dimensions  
+  description: text("description"),
+  remarks: text("remarks"),
+  frameworkVersion: varchar("framework_version").default('3.0'),
+  isActive: boolean("is_active").default(true),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
 });
 
 // Certificate status enum
@@ -243,6 +351,10 @@ export const maturityAssessmentsRelations = relations(maturityAssessments, ({ on
   complianceCertificates: many(complianceCertificates),
 }));
 
+export const frameworkQuestionsRelations = relations(frameworkQuestions, ({ one }) => ({}));
+
+export const useCaseRiskMappingRelations = relations(useCaseRiskMapping, ({ one }) => ({}));
+
 export const complianceCertificatesRelations = relations(complianceCertificates, ({ one }) => ({
   user: one(users, {
     fields: [complianceCertificates.userId],
@@ -306,6 +418,18 @@ export const insertComplianceCertificateSchema = createInsertSchema(complianceCe
   updatedAt: true,
 });
 
+export const insertFrameworkQuestionSchema = createInsertSchema(frameworkQuestions).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export const insertUseCaseRiskMappingSchema = createInsertSchema(useCaseRiskMapping).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
 // Types
 export type UpsertUser = typeof users.$inferInsert;
 export type User = typeof users.$inferSelect;
@@ -325,3 +449,7 @@ export type MaturityAssessment = typeof maturityAssessments.$inferSelect;
 export type InsertMaturityAssessment = z.infer<typeof insertMaturityAssessmentSchema>;
 export type ComplianceCertificate = typeof complianceCertificates.$inferSelect;
 export type InsertComplianceCertificate = z.infer<typeof insertComplianceCertificateSchema>;
+export type FrameworkQuestion = typeof frameworkQuestions.$inferSelect;
+export type InsertFrameworkQuestion = z.infer<typeof insertFrameworkQuestionSchema>;
+export type UseCaseRiskMapping = typeof useCaseRiskMapping.$inferSelect;
+export type InsertUseCaseRiskMapping = z.infer<typeof insertUseCaseRiskMappingSchema>;
