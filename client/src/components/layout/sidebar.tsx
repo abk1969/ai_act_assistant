@@ -8,6 +8,7 @@ import {
   Database,
   Shield,
   FileText,
+  Award,
   Rss,
   Settings,
   LogOut
@@ -47,6 +48,11 @@ const navigationItems = [
     name: "Documentation",
     href: "/documents",
     icon: FileText,
+  },
+  {
+    name: "Certificats de conformité",
+    href: "/certificates",
+    icon: Award,
   },
   {
     name: "Veille réglementaire",

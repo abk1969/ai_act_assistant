@@ -578,6 +578,241 @@ Le registre doit contenir:
     }
   });
 
+  // Compliance Certificates Routes
+  app.get('/api/certificates', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const { systemId, type, status } = req.query;
+      
+      let certificates;
+      if (systemId) {
+        // Get certificates for specific AI system (with security check)
+        const aiSystem = await storage.getAiSystem(systemId as string);
+        if (!aiSystem || aiSystem.userId !== userId) {
+          return res.status(403).json({ message: "Access denied" });
+        }
+        certificates = await storage.getCertificatesBySystem(systemId as string);
+      } else if (status === 'valid') {
+        certificates = await storage.getValidCertificates(userId);
+      } else {
+        certificates = await storage.getCertificatesByUser(userId);
+      }
+      
+      // Filter by type if specified
+      if (type) {
+        certificates = certificates.filter(cert => cert.certificateType === type);
+      }
+      
+      res.json(certificates);
+    } catch (error) {
+      console.error("Error fetching certificates:", error);
+      res.status(500).json({ message: "Failed to fetch certificates" });
+    }
+  });
+
+  app.post('/api/certificates/generate', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      
+      // Validate request body with Zod
+      const generateCertificateSchema = z.object({
+        organizationName: z.string().min(1, "Organization name is required"),
+        aiSystemId: z.string().optional(),
+        maturityAssessmentId: z.string().optional(),
+        certificateType: z.enum(['conformity', 'risk_assessment', 'maturity', 'compliance_summary']).optional()
+      });
+      
+      const validation = generateCertificateSchema.safeParse(req.body);
+      if (!validation.success) {
+        return res.status(400).json({ 
+          message: "Invalid request data",
+          errors: validation.error.errors 
+        });
+      }
+      
+      const { aiSystemId, maturityAssessmentId, certificateType, organizationName } = validation.data;
+
+      // Get required data for certificate generation
+      let aiSystem, riskAssessment, maturityAssessment;
+      
+      if (aiSystemId) {
+        aiSystem = await storage.getAiSystem(aiSystemId);
+        if (!aiSystem || aiSystem.userId !== userId) {
+          return res.status(403).json({ message: "Access denied to AI system" });
+        }
+        // Get latest risk assessment for the system
+        const riskAssessments = await storage.getRiskAssessmentsBySystem(aiSystemId);
+        riskAssessment = riskAssessments[0]; // Most recent
+      }
+      
+      if (maturityAssessmentId) {
+        if (maturityAssessmentId === 'latest') {
+          maturityAssessment = await storage.getLatestMaturityAssessment(userId);
+        } else {
+          // Get specific maturity assessment by ID and verify ownership
+          const assessments = await storage.getMaturityAssessmentsByUser(userId);
+          maturityAssessment = assessments.find(assessment => assessment.id === maturityAssessmentId);
+          if (!maturityAssessment) {
+            return res.status(404).json({ message: "Maturity assessment not found or access denied" });
+          }
+        }
+      }
+
+      // Validate that we have enough data for certificate generation
+      if (!aiSystem && !maturityAssessment) {
+        return res.status(400).json({ 
+          message: "At least one assessment (AI system or maturity) is required for certificate generation" 
+        });
+      }
+
+      // Import and use certificate service
+      const { certificateService } = await import('./services/certificateService');
+      
+      const certificateData = await certificateService.generateCertificate({
+        userId,
+        organizationName,
+        aiSystem,
+        riskAssessment,
+        maturityAssessment,
+        certificateType: certificateType || certificateService.determineCertificateType(aiSystem, riskAssessment, maturityAssessment)
+      });
+
+      // Validate with schema before persistence
+      const validationResult = insertComplianceCertificateSchema.safeParse(certificateData);
+      if (!validationResult.success) {
+        return res.status(400).json({
+          message: "Certificate validation failed",
+          errors: validationResult.error.errors
+        });
+      }
+
+      // Save certificate to database
+      const certificate = await storage.createComplianceCertificate(validationResult.data);
+      
+      res.json({
+        success: true,
+        certificate: {
+          id: certificate.id,
+          certificateNumber: certificate.certificateNumber,
+          certificateType: certificate.certificateType,
+          organizationName: certificate.organizationName,
+          systemName: certificate.systemName,
+          complianceScore: certificate.complianceScore,
+          status: certificate.status,
+          issuedAt: certificate.issuedAt,
+          validUntil: certificate.validUntil
+        }
+      });
+    } catch (error) {
+      console.error("Error generating certificate:", error);
+      res.status(500).json({ message: "Failed to generate certificate" });
+    }
+  });
+
+  // Certificate verification endpoint (public for verification purposes)
+  app.get('/api/certificates/verify/:certificateNumber', async (req, res) => {
+    try {
+      const { certificateNumber } = req.params;
+      const { hash: providedHash } = req.query;
+      
+      const certificate = await storage.getCertificateByNumber(certificateNumber);
+      if (!certificate) {
+        return res.status(404).json({ 
+          valid: false, 
+          message: "Certificate not found" 
+        });
+      }
+
+      // Import certificate service and verify hash
+      const { certificateService } = await import('./services/certificateService');
+      const hashValid = certificateService.verifyCertificationHash(certificate);
+      
+      // Check expiry and status
+      const isExpired = new Date() > new Date(certificate.validUntil || 0);
+      const statusValid = certificate.status === 'valid';
+      
+      // If external hash provided, validate it against stored hash
+      let externalHashValid = true;
+      if (providedHash) {
+        externalHashValid = providedHash === certificate.certificationHash;
+      }
+
+      const isFullyValid = hashValid && statusValid && !isExpired && externalHashValid;
+
+      res.json({
+        valid: isFullyValid,
+        certificate: isFullyValid ? {
+          certificateNumber: certificate.certificateNumber,
+          organizationName: certificate.organizationName,
+          systemName: certificate.systemName,
+          certificateType: certificate.certificateType,
+          complianceScore: certificate.complianceScore,
+          issuedAt: certificate.issuedAt,
+          validUntil: certificate.validUntil,
+          status: certificate.status
+        } : null,
+        message: !hashValid ? "Certificate integrity check failed" :
+                isExpired ? "Certificate has expired" :
+                !statusValid ? "Certificate is not valid" :
+                !externalHashValid ? "Provided hash does not match" :
+                "Certificate is valid"
+      });
+    } catch (error) {
+      console.error("Error verifying certificate:", error);
+      res.status(500).json({ 
+        valid: false, 
+        message: "Verification failed" 
+      });
+    }
+  });
+
+  app.get('/api/certificates/:id', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const { id } = req.params;
+      
+      const certificate = await storage.getCertificate(id);
+      if (!certificate) {
+        return res.status(404).json({ message: "Certificate not found" });
+      }
+      
+      // Security check: user can only access their own certificates
+      if (certificate.userId !== userId) {
+        return res.status(403).json({ message: "Access denied" });
+      }
+      
+      res.json(certificate);
+    } catch (error) {
+      console.error("Error fetching certificate:", error);
+      res.status(500).json({ message: "Failed to fetch certificate" });
+    }
+  });
+
+
+  app.patch('/api/certificates/:id/status', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const { id } = req.params;
+      const { status } = req.body;
+      
+      if (!['valid', 'expired', 'revoked', 'pending'].includes(status)) {
+        return res.status(400).json({ message: "Invalid status" });
+      }
+      
+      // Check certificate ownership
+      const certificate = await storage.getCertificate(id);
+      if (!certificate || certificate.userId !== userId) {
+        return res.status(403).json({ message: "Access denied" });
+      }
+      
+      const updatedCertificate = await storage.updateCertificateStatus(id, status);
+      res.json(updatedCertificate);
+    } catch (error) {
+      console.error("Error updating certificate status:", error);
+      res.status(500).json({ message: "Failed to update certificate status" });
+    }
+  });
+
   const httpServer = createServer(app);
   return httpServer;
 }

@@ -11,6 +11,7 @@ import Maturity from "@/pages/maturity";
 import Database from "@/pages/database";
 import Compliance from "@/pages/compliance";
 import Documents from "@/pages/documents";
+import Certificates from "@/pages/certificates";
 import Monitoring from "@/pages/monitoring";
 import Settings from "@/pages/settings";
 import NotFound from "@/pages/not-found";
@@ -31,6 +32,7 @@ function Router() {
           <Route path="/database" component={Database} />
           <Route path="/compliance" component={Compliance} />
           <Route path="/documents" component={Documents} />
+          <Route path="/certificates" component={Certificates} />
           <Route path="/monitoring" component={Monitoring} />
           <Route path="/settings" component={Settings} />
         </MainLayout>

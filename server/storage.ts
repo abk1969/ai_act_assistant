@@ -8,6 +8,7 @@ import {
   regulatoryUpdates,
   llmSettings,
   maturityAssessments,
+  complianceCertificates,
   type User,
   type UpsertUser,
   type AiSystem,
@@ -24,6 +25,8 @@ import {
   type InsertLlmSettings,
   type MaturityAssessment,
   type InsertMaturityAssessment,
+  type ComplianceCertificate,
+  type InsertComplianceCertificate,
 } from "@shared/schema";
 import { db } from "./db";
 import { eq, desc, and, sql, ilike } from "drizzle-orm";
@@ -79,6 +82,15 @@ export interface IStorage {
   createMaturityAssessment(assessment: InsertMaturityAssessment): Promise<MaturityAssessment>;
   getMaturityAssessmentsByUser(userId: string): Promise<MaturityAssessment[]>;
   getLatestMaturityAssessment(userId: string): Promise<MaturityAssessment | undefined>;
+
+  // Compliance Certificates
+  createComplianceCertificate(certificate: InsertComplianceCertificate): Promise<ComplianceCertificate>;
+  getCertificatesByUser(userId: string): Promise<ComplianceCertificate[]>;
+  getCertificatesBySystem(aiSystemId: string): Promise<ComplianceCertificate[]>;
+  getCertificate(id: string): Promise<ComplianceCertificate | undefined>;
+  getCertificateByNumber(certificateNumber: string): Promise<ComplianceCertificate | undefined>;
+  getValidCertificates(userId: string): Promise<ComplianceCertificate[]>;
+  updateCertificateStatus(id: string, status: 'valid' | 'expired' | 'revoked' | 'pending'): Promise<ComplianceCertificate>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -329,6 +341,70 @@ export class DatabaseStorage implements IStorage {
       .orderBy(desc(maturityAssessments.completedAt))
       .limit(1);
     return assessment;
+  }
+
+  // Compliance Certificates
+  async createComplianceCertificate(certificate: InsertComplianceCertificate): Promise<ComplianceCertificate> {
+    const [result] = await db.insert(complianceCertificates).values(certificate).returning();
+    return result;
+  }
+
+  async getCertificatesByUser(userId: string): Promise<ComplianceCertificate[]> {
+    return await db
+      .select()
+      .from(complianceCertificates)
+      .where(eq(complianceCertificates.userId, userId))
+      .orderBy(desc(complianceCertificates.issuedAt));
+  }
+
+  async getCertificatesBySystem(aiSystemId: string): Promise<ComplianceCertificate[]> {
+    return await db
+      .select()
+      .from(complianceCertificates)
+      .where(eq(complianceCertificates.aiSystemId, aiSystemId))
+      .orderBy(desc(complianceCertificates.issuedAt));
+  }
+
+  async getCertificate(id: string): Promise<ComplianceCertificate | undefined> {
+    const [certificate] = await db
+      .select()
+      .from(complianceCertificates)
+      .where(eq(complianceCertificates.id, id));
+    return certificate;
+  }
+
+  async getCertificateByNumber(certificateNumber: string): Promise<ComplianceCertificate | undefined> {
+    const [certificate] = await db
+      .select()
+      .from(complianceCertificates)
+      .where(eq(complianceCertificates.certificateNumber, certificateNumber));
+    return certificate;
+  }
+
+  async getValidCertificates(userId: string): Promise<ComplianceCertificate[]> {
+    return await db
+      .select()
+      .from(complianceCertificates)
+      .where(
+        and(
+          eq(complianceCertificates.userId, userId),
+          eq(complianceCertificates.status, 'valid'),
+          sql`${complianceCertificates.validUntil} > NOW()`
+        )
+      )
+      .orderBy(desc(complianceCertificates.issuedAt));
+  }
+
+  async updateCertificateStatus(id: string, status: 'valid' | 'expired' | 'revoked' | 'pending'): Promise<ComplianceCertificate> {
+    const [certificate] = await db
+      .update(complianceCertificates)
+      .set({ 
+        status,
+        updatedAt: new Date()
+      })
+      .where(eq(complianceCertificates.id, id))
+      .returning();
+    return certificate;
   }
 }
 

@@ -156,6 +156,37 @@ export const maturityAssessments = pgTable("maturity_assessments", {
   createdAt: timestamp("created_at").defaultNow(),
 });
 
+// Certificate status enum
+export const certificateStatusEnum = pgEnum('certificate_status', ['valid', 'expired', 'revoked', 'pending']);
+
+// Certificate type enum  
+export const certificateTypeEnum = pgEnum('certificate_type', ['conformity', 'risk_assessment', 'maturity', 'compliance_summary']);
+
+// Compliance certificates table
+export const complianceCertificates = pgTable("compliance_certificates", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  userId: varchar("user_id").notNull().references(() => users.id),
+  aiSystemId: varchar("ai_system_id").references(() => aiSystems.id),
+  maturityAssessmentId: varchar("maturity_assessment_id").references(() => maturityAssessments.id),
+  certificateType: certificateTypeEnum("certificate_type").notNull(),
+  certificateNumber: varchar("certificate_number").notNull().unique(),
+  status: certificateStatusEnum("status").default('valid'),
+  organizationName: varchar("organization_name").notNull(),
+  systemName: varchar("system_name"),
+  riskLevel: riskLevelEnum("risk_level"),
+  complianceScore: integer("compliance_score"), // 0-100
+  maturityLevel: maturityLevelEnum("maturity_level"),
+  certificationCriteria: jsonb("certification_criteria"), // What criteria were evaluated
+  complianceDetails: jsonb("compliance_details"), // Detailed compliance status
+  issuedBy: varchar("issued_by").default('IA-ACT-NAVIGATOR'),
+  issuedAt: timestamp("issued_at").defaultNow(),
+  validUntil: timestamp("valid_until"), // 1 year validity
+  certificateData: jsonb("certificate_data"), // Full certificate content for PDF generation
+  certificationHash: varchar("certification_hash"), // Hash for verification
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
 // Relations
 export const usersRelations = relations(users, ({ many }) => ({
   aiSystems: many(aiSystems),
@@ -164,6 +195,7 @@ export const usersRelations = relations(users, ({ many }) => ({
   generatedDocuments: many(generatedDocuments),
   llmSettings: many(llmSettings),
   maturityAssessments: many(maturityAssessments),
+  complianceCertificates: many(complianceCertificates),
 }));
 
 export const aiSystemsRelations = relations(aiSystems, ({ one, many }) => ({
@@ -174,6 +206,7 @@ export const aiSystemsRelations = relations(aiSystems, ({ one, many }) => ({
   riskAssessments: many(riskAssessments),
   complianceRecords: many(complianceRecords),
   generatedDocuments: many(generatedDocuments),
+  complianceCertificates: many(complianceCertificates),
 }));
 
 export const riskAssessmentsRelations = relations(riskAssessments, ({ one }) => ({
@@ -202,10 +235,26 @@ export const complianceRecordsRelations = relations(complianceRecords, ({ one })
   }),
 }));
 
-export const maturityAssessmentsRelations = relations(maturityAssessments, ({ one }) => ({
+export const maturityAssessmentsRelations = relations(maturityAssessments, ({ one, many }) => ({
   user: one(users, {
     fields: [maturityAssessments.userId],
     references: [users.id],
+  }),
+  complianceCertificates: many(complianceCertificates),
+}));
+
+export const complianceCertificatesRelations = relations(complianceCertificates, ({ one }) => ({
+  user: one(users, {
+    fields: [complianceCertificates.userId],
+    references: [users.id],
+  }),
+  aiSystem: one(aiSystems, {
+    fields: [complianceCertificates.aiSystemId],
+    references: [aiSystems.id],
+  }),
+  maturityAssessment: one(maturityAssessments, {
+    fields: [complianceCertificates.maturityAssessmentId],
+    references: [maturityAssessments.id],
   }),
 }));
 
@@ -250,6 +299,13 @@ export const insertMaturityAssessmentSchema = createInsertSchema(maturityAssessm
   createdAt: true,
 });
 
+export const insertComplianceCertificateSchema = createInsertSchema(complianceCertificates).omit({
+  id: true,
+  issuedAt: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
 // Types
 export type UpsertUser = typeof users.$inferInsert;
 export type User = typeof users.$inferSelect;
@@ -267,3 +323,5 @@ export type LlmSettings = typeof llmSettings.$inferSelect;
 export type InsertLlmSettings = z.infer<typeof insertLlmSettingsSchema>;
 export type MaturityAssessment = typeof maturityAssessments.$inferSelect;
 export type InsertMaturityAssessment = z.infer<typeof insertMaturityAssessmentSchema>;
+export type ComplianceCertificate = typeof complianceCertificates.$inferSelect;
+export type InsertComplianceCertificate = z.infer<typeof insertComplianceCertificateSchema>;
