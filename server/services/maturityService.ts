@@ -2,13 +2,16 @@ import { storage } from '../storage';
 import { llmService } from './llmService';
 import type { InsertMaturityAssessment, MaturityAssessment } from '@shared/schema';
 
-// Positive AI Framework - Organizational Maturity Domains
-export interface MaturityDomain {
+// Positive AI Framework v3.0 - 7 Dimensions Organizational Maturity
+export interface MaturityDimension {
   name: string;
   description: string;
   questions: MaturityQuestion[];
   weight: number; // importance weight in overall calculation
 }
+
+// Legacy compatibility
+export interface MaturityDomain extends MaturityDimension {}
 
 export interface MaturityQuestion {
   id: string;
@@ -51,130 +54,325 @@ export class MaturityService {
   // Define the Positive AI Framework maturity domains
   private maturityFramework: MaturityDomain[] = [
     {
-      name: 'strategy',
-      description: 'Stratégie IA et vision organisationnelle',
-      weight: 0.25,
+      name: 'justice_fairness',
+      description: 'Justice et équité',
+      weight: 0.15,
       questions: [
         {
-          id: 'strategy_vision',
-          category: 'strategy',
-          question: 'Votre organisation a-t-elle une stratégie IA claire et documentée ?',
+          id: 'justice_bias_detection',
+          category: 'justice_fairness',
+          question: 'Comment votre organisation détecte-t-elle les biais dans ses systèmes IA ?',
           options: [
-            { value: 1, label: 'Aucune stratégie', description: 'Pas de stratégie IA définie' },
-            { value: 2, label: 'Stratégie émergente', description: 'Réflexions préliminaires en cours' },
-            { value: 3, label: 'Stratégie définie', description: 'Stratégie documentée et approuvée' },
-            { value: 4, label: 'Stratégie pilotée', description: 'Exécution active avec suivi régulier' },
-            { value: 5, label: 'Stratégie optimisée', description: 'Amélioration continue basée sur les résultats' },
+            { value: 1, label: 'Aucune détection', description: 'Pas de processus de détection des biais' },
+            { value: 2, label: 'Détection basique', description: 'Tests ponctuels de biais' },
+            { value: 3, label: 'Détection systématique', description: 'Processus formalisé de détection' },
+            { value: 4, label: 'Détection continue', description: 'Monitoring permanent des biais' },
+            { value: 5, label: 'Prévention proactive', description: 'Système de prévention avancée des biais' },
           ]
         },
         {
-          id: 'strategy_leadership',
-          category: 'strategy',
-          question: 'Le leadership soutient-il activement les initiatives IA ?',
+          id: 'justice_protected_groups',
+          category: 'justice_fairness',
+          question: 'Comment protégez-vous les groupes vulnérables dans vos systèmes IA ?',
           options: [
-            { value: 1, label: 'Aucun soutien', description: 'Leadership non impliqué' },
-            { value: 2, label: 'Soutien limité', description: 'Intérêt occasionnel' },
-            { value: 3, label: 'Soutien établi', description: 'Engagement formel du leadership' },
-            { value: 4, label: 'Soutien actif', description: 'Leadership champion de l\'IA' },
-            { value: 5, label: 'Leadership transformateur', description: 'Vision IA intégrée à la stratégie globale' },
+            { value: 1, label: 'Aucune protection', description: 'Groupes vulnérables non considérés' },
+            { value: 2, label: 'Sensibilisation basique', description: 'Conscience des enjeux de protection' },
+            { value: 3, label: 'Mesures définies', description: 'Politiques de protection formalisées' },
+            { value: 4, label: 'Protection active', description: 'Mécanismes de protection implémentés' },
+            { value: 5, label: 'Inclusion optimale', description: 'Excellence en protection et inclusion' },
+          ]
+        },
+        {
+          id: 'justice_inclusive_teams',
+          category: 'justice_fairness',
+          question: 'Vos équipes de développement IA sont-elles diversifiées et inclusives ?',
+          options: [
+            { value: 1, label: 'Pas de diversité', description: 'Équipes homogènes' },
+            { value: 2, label: 'Diversité limitée', description: 'Quelques efforts de diversification' },
+            { value: 3, label: 'Diversité structurée', description: 'Politiques de diversité définies' },
+            { value: 4, label: 'Inclusion active', description: 'Culture inclusive établie' },
+            { value: 5, label: 'Excellence inclusive', description: 'Modèle de référence en diversité' },
           ]
         }
       ]
     },
     {
-      name: 'governance',
-      description: 'Gouvernance et management des risques IA',
-      weight: 0.30,
+      name: 'transparency_explainability',
+      description: 'Transparence et explicabilité',
+      weight: 0.15,
       questions: [
         {
-          id: 'governance_structure',
-          category: 'governance',
-          question: 'Existe-t-il une structure de gouvernance IA formelle ?',
+          id: 'transparency_decision_process',
+          category: 'transparency_explainability',
+          question: 'Dans quelle mesure vos systèmes IA peuvent-ils expliquer leurs décisions ?',
           options: [
-            { value: 1, label: 'Aucune structure', description: 'Pas de gouvernance IA' },
-            { value: 2, label: 'Structure informelle', description: 'Responsabilités ad-hoc' },
-            { value: 3, label: 'Structure définie', description: 'Comités et rôles établis' },
-            { value: 4, label: 'Structure mature', description: 'Processus formalisés et suivis' },
-            { value: 5, label: 'Structure optimisée', description: 'Gouvernance adaptative et efficace' },
+            { value: 1, label: 'Boîte noire', description: 'Aucune explication des décisions IA' },
+            { value: 2, label: 'Transparence limitée', description: 'Informations de base sur le fonctionnement' },
+            { value: 3, label: 'Explicabilité technique', description: 'Explications pour les experts techniques' },
+            { value: 4, label: 'Explicabilité métier', description: 'Explications adaptées aux utilisateurs métier' },
+            { value: 5, label: 'Transparence totale', description: 'Explications claires pour tous les publics' },
           ]
         },
         {
-          id: 'risk_management',
-          category: 'governance',
-          question: 'Comment l\'organisation gère-t-elle les risques IA ?',
+          id: 'transparency_data_source',
+          category: 'transparency_explainability',
+          question: 'Votre organisation documente-t-elle les sources et traitements des données ?',
           options: [
-            { value: 1, label: 'Pas de gestion', description: 'Risques IA non identifiés' },
-            { value: 2, label: 'Identification basique', description: 'Conscience des risques majeurs' },
-            { value: 3, label: 'Évaluation systématique', description: 'Processus d\'évaluation des risques' },
-            { value: 4, label: 'Mitigation active', description: 'Plans de mitigation implementés' },
-            { value: 5, label: 'Gestion proactive', description: 'Anticipation et prévention des risques' },
+            { value: 1, label: 'Non documenté', description: 'Pas de traçabilité des données' },
+            { value: 2, label: 'Documentation basique', description: 'Informations minimales sur les sources' },
+            { value: 3, label: 'Documentation structurée', description: 'Traçabilité formalisée des données' },
+            { value: 4, label: 'Transparence active', description: 'Documentation accessible aux parties prenantes' },
+            { value: 5, label: 'Audit complet', description: 'Traçabilité complète et auditabilité' },
+          ]
+        },
+        {
+          id: 'transparency_algorithmic_impact',
+          category: 'transparency_explainability',
+          question: 'Comment communiquez-vous l\'impact algorithmique aux utilisateurs ?',
+          options: [
+            { value: 1, label: 'Aucune communication', description: 'Utilisateurs non informés de l\'usage IA' },
+            { value: 2, label: 'Information minimale', description: 'Mention de l\'usage de l\'IA' },
+            { value: 3, label: 'Communication structurée', description: 'Explication du rôle de l\'IA' },
+            { value: 4, label: 'Transparence proactive', description: 'Communication détaillée des impacts' },
+            { value: 5, label: 'Co-construction', description: 'Dialogue continu sur l\'usage de l\'IA' },
           ]
         }
       ]
     },
     {
-      name: 'ethics',
-      description: 'Éthique et IA responsable',
-      weight: 0.25,
+      name: 'human_ai_interaction',
+      description: 'Interaction humaine et IA',
+      weight: 0.15,
       questions: [
         {
-          id: 'ethics_principles',
-          category: 'ethics',
-          question: 'L\'organisation a-t-elle des principes éthiques IA définis ?',
+          id: 'human_ai_collaboration',
+          category: 'human_ai_interaction',
+          question: 'Comment vos systèmes IA sont-ils conçus pour collaborer avec les humains ?',
           options: [
-            { value: 1, label: 'Aucun principe', description: 'Pas de considérations éthiques' },
-            { value: 2, label: 'Sensibilisation émergente', description: 'Début de réflexion éthique' },
-            { value: 3, label: 'Principes documentés', description: 'Charte éthique IA établie' },
-            { value: 4, label: 'Application systématique', description: 'Intégration dans les processus' },
-            { value: 5, label: 'Culture éthique', description: 'Éthique IA intégrée à tous les niveaux' },
+            { value: 1, label: 'Remplacement total', description: 'IA remplace complètement l\'humain' },
+            { value: 2, label: 'Supervision minimale', description: 'Humain valide les décisions IA' },
+            { value: 3, label: 'Collaboration définie', description: 'Répartition claire des rôles humain-IA' },
+            { value: 4, label: 'Collaboration adaptative', description: 'Ajustement dynamique des interactions' },
+            { value: 5, label: 'Symbiose optimale', description: 'Complémentarité parfaite humain-IA' },
           ]
         },
         {
-          id: 'bias_fairness',
-          category: 'ethics',
-          question: 'Comment l\'organisation aborde-t-elle les biais et l\'équité ?',
+          id: 'human_ai_control',
+          category: 'human_ai_interaction',
+          question: 'Les utilisateurs peuvent-ils exercer un contrôle significatif sur les systèmes IA ?',
           options: [
-            { value: 1, label: 'Pas d\'approche', description: 'Biais non considérés' },
-            { value: 2, label: 'Sensibilisation basique', description: 'Conscience du problème' },
-            { value: 3, label: 'Tests systématiques', description: 'Processus de détection des biais' },
-            { value: 4, label: 'Mitigation active', description: 'Stratégies de réduction des biais' },
-            { value: 5, label: 'Équité par conception', description: 'Fairness intégrée dès la conception' },
+            { value: 1, label: 'Aucun contrôle', description: 'Système entièrement automatisé' },
+            { value: 2, label: 'Contrôle limité', description: 'Paramètres basiques modifiables' },
+            { value: 3, label: 'Contrôle structuré', description: 'Options de configuration définies' },
+            { value: 4, label: 'Contrôle adaptatif', description: 'Personnalisation avancée possible' },
+            { value: 5, label: 'Contrôle total', description: 'Utilisateur maître de toutes les décisions' },
+          ]
+        },
+        {
+          id: 'human_ai_training',
+          category: 'human_ai_interaction',
+          question: 'Comment formez-vous les utilisateurs à travailler avec l\'IA ?',
+          options: [
+            { value: 1, label: 'Aucune formation', description: 'Utilisateurs livrés à eux-mêmes' },
+            { value: 2, label: 'Formation basique', description: 'Instructions minimales d\'utilisation' },
+            { value: 3, label: 'Formation structurée', description: 'Programme de formation défini' },
+            { value: 4, label: 'Formation continue', description: 'Mise à jour régulière des compétences' },
+            { value: 5, label: 'Expertise développée', description: 'Utilisateurs experts en collaboration IA' },
           ]
         }
       ]
     },
     {
-      name: 'capabilities',
-      description: 'Capacités techniques et humaines',
-      weight: 0.20,
+      name: 'social_environmental_impact',
+      description: 'Impact social et environnemental',
+      weight: 0.10,
       questions: [
         {
-          id: 'technical_skills',
-          category: 'capabilities',
-          question: 'Quel est le niveau des compétences techniques IA dans l\'organisation ?',
+          id: 'social_impact_assessment',
+          category: 'social_environmental_impact',
+          question: 'Votre organisation évalue-t-elle l\'impact social de ses systèmes IA ?',
           options: [
-            { value: 1, label: 'Compétences limitées', description: 'Peu d\'expertise IA interne' },
-            { value: 2, label: 'Compétences émergentes', description: 'Formation en cours' },
-            { value: 3, label: 'Compétences établies', description: 'Équipes IA compétentes' },
-            { value: 4, label: 'Compétences avancées', description: 'Expertise reconnue' },
-            { value: 5, label: 'Excellence technique', description: 'Leadership technologique IA' },
+            { value: 1, label: 'Aucune évaluation', description: 'Impact social non considéré' },
+            { value: 2, label: 'Évaluation ponctuelle', description: 'Analyses ad-hoc sur demande' },
+            { value: 3, label: 'Évaluation systématique', description: 'Processus formalisé d\'évaluation' },
+            { value: 4, label: 'Suivi continu', description: 'Monitoring des impacts sociaux' },
+            { value: 5, label: 'Optimisation sociale', description: 'IA conçue pour maximiser l\'impact positif' },
           ]
         },
         {
-          id: 'data_management',
-          category: 'capabilities',
-          question: 'Comment l\'organisation gère-t-elle ses données pour l\'IA ?',
+          id: 'environmental_sustainability',
+          category: 'social_environmental_impact',
+          question: 'Comment gérez-vous l\'empreinte environnementale de vos systèmes IA ?',
           options: [
-            { value: 1, label: 'Gestion ad-hoc', description: 'Pas de stratégie données' },
-            { value: 2, label: 'Systèmes basiques', description: 'Infrastructure de base' },
-            { value: 3, label: 'Gestion structurée', description: 'Processus et outils établis' },
-            { value: 4, label: 'Gestion optimisée', description: 'Architecture données mature' },
-            { value: 5, label: 'Excellence données', description: 'Data-driven organization' },
+            { value: 1, label: 'Non considérée', description: 'Empreinte environnementale ignorée' },
+            { value: 2, label: 'Sensibilisation basique', description: 'Conscience des enjeux environnementaux' },
+            { value: 3, label: 'Mesure établie', description: 'Quantification de l\'empreinte carbone' },
+            { value: 4, label: 'Réduction active', description: 'Stratégies de réduction de l\'impact' },
+            { value: 5, label: 'Neutralité carbone', description: 'IA neutre ou positive pour l\'environnement' },
+          ]
+        }
+      ]
+    },
+    {
+      name: 'responsibility',
+      description: 'Responsabilité',
+      weight: 0.15,
+      questions: [
+        {
+          id: 'responsibility_accountability',
+          category: 'responsibility',
+          question: 'Comment est organisée la responsabilité des décisions IA dans votre organisation ?',
+          options: [
+            { value: 1, label: 'Responsabilité floue', description: 'Pas de responsable identifié' },
+            { value: 2, label: 'Responsabilité technique', description: 'Équipes techniques responsables' },
+            { value: 3, label: 'Responsabilité métier', description: 'Propriétaires métier responsables' },
+            { value: 4, label: 'Responsabilité partagée', description: 'Modèle de responsabilité claire' },
+            { value: 5, label: 'Responsabilité totale', description: 'Chaîne complète de responsabilité' },
+          ]
+        },
+        {
+          id: 'responsibility_redress',
+          category: 'responsibility',
+          question: 'Existe-t-il des mécanismes de recours en cas d\'erreur IA ?',
+          options: [
+            { value: 1, label: 'Aucun recours', description: 'Pas de possibilité de contester' },
+            { value: 2, label: 'Recours limité', description: 'Processus informel de plainte' },
+            { value: 3, label: 'Recours structuré', description: 'Processus formalisé de recours' },
+            { value: 4, label: 'Recours efficace', description: 'Mécanismes rapides et effectifs' },
+            { value: 5, label: 'Justice algorithmique', description: 'Système complet de recours et réparation' },
+          ]
+        }
+      ]
+    },
+    {
+      name: 'data_privacy',
+      description: 'Données et vie privée',
+      weight: 0.15,
+      questions: [
+        {
+          id: 'data_privacy_protection',
+          category: 'data_privacy',
+          question: 'Comment votre organisation protège-t-elle la vie privée dans ses systèmes IA ?',
+          options: [
+            { value: 1, label: 'Protection minimale', description: 'Peu d\'attention à la vie privée' },
+            { value: 2, label: 'Conformité basique', description: 'Respect des exigences légales minimales' },
+            { value: 3, label: 'Protection structurée', description: 'Processus formalisés de protection' },
+            { value: 4, label: 'Privacy by design', description: 'Vie privée intégrée dès la conception' },
+            { value: 5, label: 'Excellence privacy', description: 'Leadership en protection de la vie privée' },
+          ]
+        },
+        {
+          id: 'data_governance',
+          category: 'data_privacy',
+          question: 'Existe-t-il une gouvernance claire des données pour l\'IA ?',
+          options: [
+            { value: 1, label: 'Gouvernance inexistante', description: 'Pas de règles sur les données' },
+            { value: 2, label: 'Règles basiques', description: 'Politiques minimales de données' },
+            { value: 3, label: 'Gouvernance formalisée', description: 'Cadre de gouvernance établi' },
+            { value: 4, label: 'Gouvernance mature', description: 'Contrôles et audits réguliers' },
+            { value: 5, label: 'Gouvernance exemplaire', description: 'Modèle de référence en gouvernance' },
+          ]
+        },
+        {
+          id: 'data_consent_rights',
+          category: 'data_privacy',
+          question: 'Comment gérez-vous les droits des personnes sur leurs données ?',
+          options: [
+            { value: 1, label: 'Droits ignorés', description: 'Pas de gestion des droits individuels' },
+            { value: 2, label: 'Conformité minimale', description: 'Respect basique du RGPD/CCPA' },
+            { value: 3, label: 'Gestion structurée', description: 'Processus clairs pour les droits' },
+            { value: 4, label: 'Facilitation active', description: 'Outils simples pour exercer les droits' },
+            { value: 5, label: 'Empowerment total', description: 'Contrôle complet des individus sur leurs données' },
+          ]
+        }
+      ]
+    },
+    {
+      name: 'technical_robustness_security',
+      description: 'Robustesse technique et sécurité',
+      weight: 0.15,
+      questions: [
+        {
+          id: 'technical_reliability',
+          category: 'technical_robustness_security',
+          question: 'Quelle est la fiabilité technique de vos systèmes IA ?',
+          options: [
+            { value: 1, label: 'Fiabilité faible', description: 'Systèmes instables et peu fiables' },
+            { value: 2, label: 'Fiabilité basique', description: 'Fonctionnement correct dans conditions normales' },
+            { value: 3, label: 'Fiabilité éprouvée', description: 'Tests systématiques et monitoring' },
+            { value: 4, label: 'Haute fiabilité', description: 'Systèmes robustes et résilients' },
+            { value: 5, label: 'Fiabilité critique', description: 'Standards de fiabilité maximaux' },
+          ]
+        },
+        {
+          id: 'security_measures',
+          category: 'technical_robustness_security',
+          question: 'Comment sécurisez-vous vos systèmes IA contre les attaques ?',
+          options: [
+            { value: 1, label: 'Sécurité minimale', description: 'Peu de mesures de sécurité IA' },
+            { value: 2, label: 'Sécurité basique', description: 'Mesures de sécurité standards' },
+            { value: 3, label: 'Sécurité renforcée', description: 'Sécurité spécifique aux systèmes IA' },
+            { value: 4, label: 'Sécurité avancée', description: 'Protection contre attaques adversaires' },
+            { value: 5, label: 'Sécurité militaire', description: 'Niveau de sécurité maximal' },
+          ]
+        },
+        {
+          id: 'testing_validation',
+          category: 'technical_robustness_security',
+          question: 'Comment testez-vous et validez-vous vos systèmes IA ?',
+          options: [
+            { value: 1, label: 'Tests limités', description: 'Tests minimaux avant déploiement' },
+            { value: 2, label: 'Tests standards', description: 'Tests fonctionnels de base' },
+            { value: 3, label: 'Tests complets', description: 'Suite complète de tests automatisés' },
+            { value: 4, label: 'Validation continue', description: 'Monitoring et validation en continu' },
+            { value: 5, label: 'Validation formelle', description: 'Méthodes formelles de validation' },
           ]
         }
       ]
     }
   ];
+
+  constructor() {
+    this.validateFramework();
+  }
+
+  private validateFramework(): void {
+    // Validate that all 7 dimensions are present
+    const expectedDimensions = [
+      'justice_fairness',
+      'transparency_explainability', 
+      'human_ai_interaction',
+      'social_environmental_impact',
+      'responsibility',
+      'data_privacy',
+      'technical_robustness_security'
+    ];
+    
+    const actualDimensions = this.maturityFramework.map(d => d.name);
+    const missingDimensions = expectedDimensions.filter(dim => !actualDimensions.includes(dim));
+    
+    if (missingDimensions.length > 0) {
+      throw new Error(`Missing dimensions in Positive AI Framework v3.0: ${missingDimensions.join(', ')}`);
+    }
+    
+    if (actualDimensions.length !== 7) {
+      throw new Error(`Framework should have exactly 7 dimensions, found ${actualDimensions.length}`);
+    }
+
+    // Validate weights sum to 1.0 (within tolerance for floating point)
+    const totalWeight = this.maturityFramework.reduce((sum, domain) => sum + domain.weight, 0);
+    const tolerance = 0.0001;
+    
+    if (Math.abs(totalWeight - 1.0) > tolerance) {
+      throw new Error(`Domain weights must sum to 1.0, current sum is ${totalWeight.toFixed(4)}`);
+    }
+
+    console.log('✅ Positive AI Framework v3.0 validation passed:', {
+      dimensions: actualDimensions.length,
+      weightSum: totalWeight.toFixed(4),
+      dimensions_list: actualDimensions
+    });
+  }
 
   async assessOrganizationalMaturity(
     formData: MaturityFormData,
@@ -210,7 +408,9 @@ export class MaturityService {
       totalWeightedScore += domainScore * domain.weight;
     }
 
-    const overallScore = Math.round(totalWeightedScore);
+    // Normalize score to ensure it stays within 0-100 range
+    const rawScore = totalWeightedScore;
+    const overallScore = Math.max(0, Math.min(100, Math.round(rawScore)));
     const overallMaturity = this.getMaturityLevelFromScore(overallScore);
 
     // Generate AI-powered recommendations
@@ -274,25 +474,40 @@ export class MaturityService {
 
   private getDomainStrengths(domain: string, score: number): string[] {
     const strengths: Record<string, string[]> = {
-      strategy: [
-        'Vision IA claire et alignée',
-        'Leadership engagé',
-        'Objectifs mesurables définis'
+      justice_fairness: [
+        'Mécanismes de détection des biais robustes',
+        'Politiques de protection des groupes vulnérables',
+        'Équipes diverses et inclusives'
       ],
-      governance: [
-        'Structure de gouvernance solide',
-        'Gestion proactive des risques',
-        'Processus de décision formalisés'
+      transparency_explainability: [
+        'Systèmes explicables et transparents',
+        'Documentation complète des processus',
+        'Communication claire des impacts algorithmiques'
       ],
-      ethics: [
-        'Principes éthiques établis',
-        'Processus de détection des biais',
-        'Culture de responsabilité'
+      human_ai_interaction: [
+        'Collaboration humain-IA optimisée',
+        'Contrôle utilisateur bien défini',
+        'Formation continue des équipes'
       ],
-      capabilities: [
-        'Compétences techniques avancées',
-        'Infrastructure données robuste',
-        'Équipes pluridisciplinaires'
+      social_environmental_impact: [
+        'Évaluation systématique des impacts sociaux',
+        'Stratégies de réduction environnementale',
+        'IA à impact positif'
+      ],
+      responsibility: [
+        'Chaîne de responsabilité claire',
+        'Mécanismes de recours efficaces',
+        'Culture de responsabilisation'
+      ],
+      data_privacy: [
+        'Privacy by design implémenté',
+        'Gouvernance des données exemplaire',
+        'Gestion proactive des droits individuels'
+      ],
+      technical_robustness_security: [
+        'Haute fiabilité technique',
+        'Sécurité avancée contre les attaques',
+        'Validation continue et complète'
       ]
     };
 
@@ -301,25 +516,40 @@ export class MaturityService {
 
   private getDomainImprovements(domain: string, score: number): string[] {
     const improvements: Record<string, string[]> = {
-      strategy: [
-        'Définir une stratégie IA claire',
-        'Renforcer l\'engagement du leadership',
-        'Établir des KPIs mesurables'
+      justice_fairness: [
+        'Implémenter des outils de détection des biais',
+        'Développer des politiques de protection inclusive',
+        'Diversifier les équipes de développement IA'
       ],
-      governance: [
-        'Créer un comité de gouvernance IA',
-        'Implémenter des processus de gestion des risques',
-        'Formaliser les responsabilités'
+      transparency_explainability: [
+        'Améliorer l\'explicabilité des modèles IA',
+        'Documenter les sources et traitements de données',
+        'Communiquer clairement les impacts algorithmiques'
       ],
-      ethics: [
-        'Développer des principes éthiques IA',
-        'Mettre en place des tests de biais',
-        'Former les équipes à l\'éthique IA'
+      human_ai_interaction: [
+        'Optimiser la collaboration humain-IA',
+        'Renforcer le contrôle utilisateur',
+        'Former les utilisateurs à l\'interaction IA'
       ],
-      capabilities: [
-        'Renforcer les compétences techniques',
-        'Améliorer l\'infrastructure données',
-        'Recruter des talents IA'
+      social_environmental_impact: [
+        'Mettre en place l\'évaluation d\'impact social',
+        'Mesurer et réduire l\'empreinte environnementale',
+        'Aligner l\'IA sur les objectifs sociaux'
+      ],
+      responsibility: [
+        'Clarifier les chaînes de responsabilité',
+        'Créer des mécanismes de recours',
+        'Renforcer la culture de responsabilisation'
+      ],
+      data_privacy: [
+        'Implémenter Privacy by Design',
+        'Formaliser la gouvernance des données',
+        'Faciliter l\'exercice des droits individuels'
+      ],
+      technical_robustness_security: [
+        'Améliorer la fiabilité technique',
+        'Renforcer les mesures de sécurité IA',
+        'Implémenter des tests et validations complètes'
       ]
     };
 
@@ -418,10 +648,13 @@ Fournissez exactement 5 recommandations concrètes pour améliorer la maturité 
 
   private getResourcesForDomain(domain: string): string[] {
     const resources: Record<string, string[]> = {
-      strategy: ['Chief AI Officer', 'Strategic consultant', 'Budget planning'],
-      governance: ['Risk manager', 'Legal counsel', 'Compliance specialist'],
-      ethics: ['Ethics committee', 'External ethics advisor', 'Training budget'],
-      capabilities: ['AI engineers', 'Data scientists', 'Infrastructure investment']
+      justice_fairness: ['Expert en biais algorithmiques', 'Spécialiste diversité & inclusion', 'Outils de détection de biais'],
+      transparency_explainability: ['Expert en explicabilité IA', 'Technical writer', 'Outils de documentation'],
+      human_ai_interaction: ['UX designer IA', 'Ergonome', 'Plateforme de formation'],
+      social_environmental_impact: ['Analyste impact social', 'Expert développement durable', 'Outils de mesure d\'impact'],
+      responsibility: ['Responsable éthique IA', 'Juriste spécialisé', 'Système de recours'],
+      data_privacy: ['DPO (Data Protection Officer)', 'Expert RGPD', 'Outils de gestion des consentements'],
+      technical_robustness_security: ['Ingénieur sécurité IA', 'Expert en tests adversaires', 'Infrastructure de monitoring']
     };
 
     return resources[domain] || ['Personnel dédié', 'Budget alloué', 'Formation'];
