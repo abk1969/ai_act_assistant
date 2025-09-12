@@ -8,6 +8,7 @@ import { Badge } from '@/components/ui/badge';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Progress } from '@/components/ui/progress';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { 
   TrendingUp, 
   CheckCircle, 
@@ -21,6 +22,55 @@ import {
   Settings
 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
+
+// Constants for Framework Positive AI v3.0
+const INDUSTRY_SECTORS = [
+  { value: 'healthcare', label: 'Santé et sciences de la vie' },
+  { value: 'transport', label: 'Transport et logistique' },
+  { value: 'finance', label: 'Banque et finance' },
+  { value: 'education', label: 'Éducation et formation' },
+  { value: 'law_enforcement', label: 'Forces de l\'ordre et justice' },
+  { value: 'energy', label: 'Énergie et utilities' },
+  { value: 'agriculture', label: 'Agriculture et agroalimentaire' },
+  { value: 'manufacturing', label: 'Industrie manufacturière' },
+  { value: 'retail', label: 'Commerce et distribution' },
+  { value: 'telecommunications', label: 'Télécommunications et médias' },
+  { value: 'construction', label: 'BTP et construction' },
+  { value: 'real_estate', label: 'Immobilier et foncier' },
+  { value: 'tourism', label: 'Tourisme et hôtellerie' },
+  { value: 'entertainment', label: 'Divertissement et culture' },
+  { value: 'consulting', label: 'Conseil et services professionnels' },
+  { value: 'research', label: 'Recherche et développement' },
+  { value: 'government', label: 'Administration publique' },
+  { value: 'defense', label: 'Défense et sécurité' },
+  { value: 'insurance', label: 'Assurance et protection sociale' },
+  { value: 'non_profit', label: 'Associations et ONG' },
+  { value: 'technology', label: 'Technologies de l\'information' },
+  { value: 'other', label: 'Autre secteur' }
+];
+
+const AI_USE_CASES = [
+  { value: 'predictive_analytics', label: 'Analyse prédictive et forecasting' },
+  { value: 'customer_service', label: 'Service client automatisé (chatbots, assistants)' },
+  { value: 'fraud_detection', label: 'Détection de fraude et sécurité' },
+  { value: 'recommendation_systems', label: 'Systèmes de recommandation' },
+  { value: 'image_recognition', label: 'Reconnaissance d\'images et vision par ordinateur' },
+  { value: 'natural_language_processing', label: 'Traitement du langage naturel (NLP)' },
+  { value: 'process_automation', label: 'Automatisation des processus métier (RPA+)' },
+  { value: 'risk_assessment', label: 'Évaluation et gestion des risques' },
+  { value: 'quality_control', label: 'Contrôle qualité et inspection automatisée' },
+  { value: 'supply_chain_optimization', label: 'Optimisation de chaîne d\'approvisionnement' },
+  { value: 'medical_diagnosis', label: 'Diagnostic médical et aide à la décision clinique' },
+  { value: 'financial_trading', label: 'Trading algorithmique et gestion d\'actifs' },
+  { value: 'hr_recruitment', label: 'Recrutement et gestion des talents' },
+  { value: 'content_generation', label: 'Génération de contenu (texte, images, vidéo)' },
+  { value: 'voice_recognition', label: 'Reconnaissance vocale et synthèse vocale' },
+  { value: 'autonomous_systems', label: 'Systèmes autonomes (véhicules, drones, robots)' },
+  { value: 'pricing_optimization', label: 'Optimisation des prix et revenus' },
+  { value: 'sentiment_analysis', label: 'Analyse de sentiment et opinion mining' },
+  { value: 'predictive_maintenance', label: 'Maintenance prédictive et IoT' },
+  { value: 'other', label: 'Autre cas d\'usage' }
+];
 
 // Types
 interface MaturityDomain {
@@ -45,6 +95,8 @@ interface MaturityOption {
 
 interface MaturityFormData {
   organizationName: string;
+  industrySector?: string;
+  primaryUseCase?: string;
   responses: Record<string, number>;
 }
 
@@ -72,6 +124,8 @@ export default function MaturityPage() {
   const [currentStep, setCurrentStep] = useState<'form' | 'result'>('form');
   const [formData, setFormData] = useState<MaturityFormData>({
     organizationName: '',
+    industrySector: undefined,
+    primaryUseCase: undefined,
     responses: {}
   });
   const [assessmentResult, setAssessmentResult] = useState<MaturityAssessmentResult | null>(null);
@@ -162,6 +216,8 @@ export default function MaturityPage() {
     setAssessmentResult(null);
     setFormData({
       organizationName: '',
+      industrySector: undefined,
+      primaryUseCase: undefined,
       responses: {}
     });
   };
@@ -268,6 +324,46 @@ export default function MaturityPage() {
                 onChange={(e) => setFormData(prev => ({ ...prev, organizationName: e.target.value }))}
                 data-testid="input-organization-name"
               />
+            </div>
+
+            {/* Industry Sector */}
+            <div className="space-y-2">
+              <Label htmlFor="industry-sector">Secteur d'activité</Label>
+              <Select
+                value={formData.industrySector}
+                onValueChange={(value) => setFormData(prev => ({ ...prev, industrySector: value }))}
+              >
+                <SelectTrigger data-testid="select-industry-sector">
+                  <SelectValue placeholder="Sélectionnez votre secteur d'activité" />
+                </SelectTrigger>
+                <SelectContent>
+                  {INDUSTRY_SECTORS.map((sector) => (
+                    <SelectItem key={sector.value} value={sector.value}>
+                      {sector.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            {/* Primary Use Case */}
+            <div className="space-y-2">
+              <Label htmlFor="primary-use-case">Cas d'usage principal IA</Label>
+              <Select
+                value={formData.primaryUseCase}
+                onValueChange={(value) => setFormData(prev => ({ ...prev, primaryUseCase: value }))}
+              >
+                <SelectTrigger data-testid="select-primary-use-case">
+                  <SelectValue placeholder="Sélectionnez votre cas d'usage principal IA" />
+                </SelectTrigger>
+                <SelectContent>
+                  {AI_USE_CASES.map((useCase) => (
+                    <SelectItem key={useCase.value} value={useCase.value}>
+                      {useCase.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
 
             {/* Questions by Domain */}
