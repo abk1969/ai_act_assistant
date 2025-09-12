@@ -4,7 +4,9 @@ import type {
   InsertRiskAssessment, 
   InsertAiSystem, 
   RiskAssessmentFormData,
-  RiskAssessmentResult
+  RiskAssessmentResult,
+  FrameworkAssessmentData,
+  FrameworkAssessmentResult
 } from "@shared/schema";
 
 // Legacy interface kept for backward compatibility during migration
@@ -296,7 +298,27 @@ class AssessmentService {
     return { isLimitedRisk: false, reasoning: '' };
   }
 
+  // ✅ ENHANCED: Now supports both legacy and Framework v3.0 formats
   async performRiskAssessment(
+    formData: AssessmentFormData | RiskAssessmentFormData,
+    userId: string
+  ): Promise<LegacyRiskAssessmentResult | RiskAssessmentResult> {
+    // Check if this is Framework v3.0 format
+    if (this.isFrameworkV3Format(formData)) {
+      return await this.assessCombined(formData as RiskAssessmentFormData);
+    }
+    
+    // Legacy assessment for backward compatibility
+    return await this.performLegacyAssessment(formData as AssessmentFormData, userId);
+  }
+
+  private isFrameworkV3Format(formData: any): boolean {
+    return formData.frameworkResponses !== undefined || 
+           formData.organizationName !== undefined ||
+           (formData.systemName !== undefined && formData.sector === undefined);
+  }
+
+  private async performLegacyAssessment(
     formData: AssessmentFormData,
     userId: string
   ): Promise<LegacyRiskAssessmentResult> {
@@ -777,6 +799,617 @@ class AssessmentService {
         short_term: result.timeline.short_term,
         long_term: result.timeline.long_term
       } as any,
+    };
+
+    const assessment = await storage.createRiskAssessment(assessmentData);
+
+    return {
+      aiSystemId: aiSystem.id,
+      assessmentId: assessment.id,
+    };
+  }
+
+  // ✅ NEW: Positive AI Framework v3.0 Assessment Engine
+  async assessFrameworkV3(assessmentData: FrameworkAssessmentData): Promise<FrameworkAssessmentResult> {
+    // Framework v3.0 - 7 dimensions scoring
+    const dimensionResults: Record<string, any> = {};
+    
+    // 1. Calculate scores for each dimension
+    for (const dimension of this.getFrameworkDimensions()) {
+      dimensionResults[dimension.id] = await this.calculateDimensionScore(
+        dimension,
+        assessmentData.responses[dimension.id] || {}
+      );
+    }
+    
+    // 2. Calculate overall weighted score
+    const overallScore = this.calculateOverallFrameworkScore(dimensionResults);
+    const overallLevel = this.getPerformanceLevel(overallScore);
+    
+    // 3. Assess risk levels
+    const { customerRisk, employeeRisk } = this.assessFrameworkRisks(dimensionResults);
+    
+    // 4. Generate priority actions
+    const priorityActions = this.generatePriorityActions(dimensionResults);
+    
+    // 5. Generate recommendations
+    const recommendations = this.generateFrameworkRecommendations(dimensionResults);
+    
+    return {
+      dimensionResults,
+      overallScore,
+      overallLevel,
+      customerRisk,
+      employeeRisk,
+      priorityActions,
+      recommendations,
+      assessmentVersion: '3.0'
+    };
+  }
+
+  private getFrameworkDimensions() {
+    return [
+      {
+        id: 'justice_fairness',
+        name: 'Justice & Fairness',
+        weight: 20, // Higher weight for critical dimension
+        strategies: [
+          'data_biases_identified_mitigated',
+          'design_biases_identified_mitigated', 
+          'biased_results_identified_mitigated',
+          'bias_monitoring',
+          'stakeholder_engagement'
+        ]
+      },
+      {
+        id: 'transparency_explainability',
+        name: 'Transparency & Explainability',
+        weight: 18,
+        strategies: [
+          'algorithmic_transparency',
+          'decision_transparency',
+          'process_transparency'
+        ]
+      },
+      {
+        id: 'human_ai_interaction',
+        name: 'Human-AI Interaction',
+        weight: 16,
+        strategies: [
+          'human_oversight_control',
+          'meaningful_human_control',
+          'user_empowerment'
+        ]
+      },
+      {
+        id: 'social_environmental_impact',
+        name: 'Social & Environmental Impact',
+        weight: 15,
+        strategies: [
+          'sustainably_developed_by_design',
+          'promoting_positive_outcomes',
+          'avoidance_of_societal_harms'
+        ]
+      },
+      {
+        id: 'responsibility',
+        name: 'Responsibility',
+        weight: 12,
+        strategies: [
+          'collection_data_traceable_requirements',
+          'license_of_data',
+          'protected_from_disclosure',
+          'approaches_privacy_preservation',
+          'accountability_governance'
+        ]
+      },
+      {
+        id: 'data_privacy',
+        name: 'Data & Privacy',
+        weight: 10,
+        strategies: [
+          'data_minimization',
+          'purpose_limitation',
+          'consent_management',
+          'security_protection',
+          'rights_management'
+        ]
+      },
+      {
+        id: 'technical_robustness_security',
+        name: 'Technical Robustness & Security',
+        weight: 9,
+        strategies: [
+          'accuracy_reliability',
+          'fallback_procedures',
+          'security_resilience'
+        ]
+      }
+    ];
+  }
+
+  private async calculateDimensionScore(
+    dimension: any,
+    responses: Record<string, number>
+  ): Promise<any> {
+    let totalScore = 0;
+    let totalWeight = 0;
+    const strategyResults: Record<string, any> = {};
+    
+    // Calculate score for each strategy in the dimension
+    for (const strategy of dimension.strategies) {
+      const strategyScore = this.calculateStrategyScore(strategy, responses);
+      const strategyWeight = 100 / dimension.strategies.length; // Equal weight for now
+      
+      strategyResults[strategy] = {
+        score: strategyScore,
+        level: this.getPerformanceLevel(strategyScore),
+        strengths: this.getStrategyStrengths(strategy, strategyScore),
+        improvements: this.getStrategyImprovements(strategy, strategyScore)
+      };
+      
+      totalScore += strategyScore * strategyWeight;
+      totalWeight += strategyWeight;
+    }
+    
+    const dimensionScore = totalWeight > 0 ? totalScore / totalWeight : 0;
+    
+    return {
+      score: Math.round(dimensionScore),
+      level: this.getPerformanceLevel(dimensionScore),
+      strategyResults,
+      overallStrengths: this.getDimensionStrengths(dimension.id, dimensionScore),
+      overallImprovements: this.getDimensionImprovements(dimension.id, dimensionScore)
+    };
+  }
+
+  private calculateStrategyScore(strategy: string, responses: Record<string, number>): number {
+    // Get questions for this strategy (simplified - in real implementation would query database)
+    const strategyQuestions = this.getStrategyQuestions(strategy);
+    
+    let totalScore = 0;
+    let questionCount = 0;
+    
+    for (const questionId of strategyQuestions) {
+      if (responses[questionId] !== undefined) {
+        // Convert 1-5 scale to 0-100
+        totalScore += ((responses[questionId] - 1) / 4) * 100;
+        questionCount++;
+      }
+    }
+    
+    return questionCount > 0 ? totalScore / questionCount : 0;
+  }
+
+  private getStrategyQuestions(strategy: string): string[] {
+    // Simplified mapping - in real implementation would query framework_questions table
+    const strategyQuestionMap: Record<string, string[]> = {
+      'data_biases_identified_mitigated': ['justice_1_1', 'justice_1_2', 'justice_1_3'],
+      'design_biases_identified_mitigated': ['justice_2_1', 'justice_2_2'],
+      'biased_results_identified_mitigated': ['justice_3_1', 'justice_3_2'],
+      'bias_monitoring': ['justice_4_1', 'justice_4_2'],
+      'stakeholder_engagement': ['justice_5_1'],
+      // Add other strategies...
+    };
+    
+    return strategyQuestionMap[strategy] || [];
+  }
+
+  private calculateOverallFrameworkScore(dimensionResults: Record<string, any>): number {
+    const dimensions = this.getFrameworkDimensions();
+    let totalWeightedScore = 0;
+    let totalWeight = 0;
+    
+    for (const dimension of dimensions) {
+      const result = dimensionResults[dimension.id];
+      if (result) {
+        totalWeightedScore += result.score * dimension.weight;
+        totalWeight += dimension.weight;
+      }
+    }
+    
+    return totalWeight > 0 ? Math.round(totalWeightedScore / totalWeight) : 0;
+  }
+
+  private assessFrameworkRisks(dimensionResults: Record<string, any>): {
+    customerRisk: 'none' | 'minimal' | 'moderate' | 'high' | 'critical';
+    employeeRisk: 'none' | 'minimal' | 'moderate' | 'high' | 'critical';
+  } {
+    // Assess risk based on dimension scores
+    const criticalDimensions = ['justice_fairness', 'transparency_explainability', 'human_ai_interaction'];
+    let maxCustomerRisk: 'none' | 'minimal' | 'moderate' | 'high' | 'critical' = 'none';
+    let maxEmployeeRisk: 'none' | 'minimal' | 'moderate' | 'high' | 'critical' = 'none';
+    
+    for (const [dimId, result] of Object.entries(dimensionResults)) {
+      const riskLevel = this.scoreToRiskLevel(result.score);
+      
+      // Higher risk for critical dimensions
+      if (criticalDimensions.includes(dimId)) {
+        if (this.riskLevelToNumber(riskLevel) > this.riskLevelToNumber(maxCustomerRisk)) {
+          maxCustomerRisk = riskLevel;
+        }
+      }
+      
+      if (this.riskLevelToNumber(riskLevel) > this.riskLevelToNumber(maxEmployeeRisk)) {
+        maxEmployeeRisk = riskLevel;
+      }
+    }
+    
+    return { customerRisk: maxCustomerRisk, employeeRisk: maxEmployeeRisk };
+  }
+
+  private scoreToRiskLevel(score: number): 'none' | 'minimal' | 'moderate' | 'high' | 'critical' {
+    if (score >= 90) return 'none';
+    if (score >= 75) return 'minimal';
+    if (score >= 60) return 'moderate';
+    if (score >= 40) return 'high';
+    return 'critical';
+  }
+
+  private riskLevelToNumber(level: string): number {
+    const map = { 'none': 0, 'minimal': 1, 'moderate': 2, 'high': 3, 'critical': 4 };
+    return map[level as keyof typeof map] || 0;
+  }
+
+  private getPerformanceLevel(score: number): 'excellent' | 'good' | 'adequate' | 'needs_improvement' | 'critical' {
+    if (score >= 90) return 'excellent';
+    if (score >= 75) return 'good';
+    if (score >= 60) return 'adequate';
+    if (score >= 40) return 'needs_improvement';
+    return 'critical';
+  }
+
+  private generatePriorityActions(dimensionResults: Record<string, any>): Array<{
+    dimension: string;
+    strategy: string;
+    action: string;
+    priority: 'critical' | 'high' | 'medium';
+    timeline: string;
+  }> {
+    const actions: Array<any> = [];
+    
+    for (const [dimId, result] of Object.entries(dimensionResults)) {
+      if (result.score < 60) { // Needs improvement
+        const priority = result.score < 40 ? 'critical' : 'high';
+        const timeline = priority === 'critical' ? 'Immédiat' : '1-3 mois';
+        
+        // Find worst performing strategies
+        for (const [strategyId, strategyResult] of Object.entries(result.strategyResults)) {
+          if (strategyResult.score < 60) {
+            actions.push({
+              dimension: dimId,
+              strategy: strategyId,
+              action: this.getActionForStrategy(strategyId),
+              priority,
+              timeline
+            });
+          }
+        }
+      }
+    }
+    
+    return actions.slice(0, 10); // Top 10 priority actions
+  }
+
+  private getActionForStrategy(strategy: string): string {
+    const actionMap: Record<string, string> = {
+      'data_biases_identified_mitigated': 'Conduire une analyse approfondie des biais dans les données',
+      'design_biases_identified_mitigated': 'Revoir la conception du modèle pour éliminer les biais',
+      'bias_monitoring': 'Mettre en place une surveillance continue des biais',
+      'algorithmic_transparency': 'Documenter et expliquer les algorithmes utilisés',
+      'human_oversight_control': 'Renforcer la supervision humaine',
+      // Add more strategies...
+    };
+    
+    return actionMap[strategy] || 'Améliorer cette dimension selon les bonnes pratiques';
+  }
+
+  private generateFrameworkRecommendations(dimensionResults: Record<string, any>): string[] {
+    const recommendations: string[] = [];
+    
+    // General recommendations based on overall performance
+    const avgScore = Object.values(dimensionResults).reduce((sum: number, result: any) => sum + result.score, 0) / 
+                     Object.keys(dimensionResults).length;
+    
+    if (avgScore < 60) {
+      recommendations.push(
+        'Amélioration globale requise : Score Framework v3.0 en dessous du seuil recommandé',
+        'Priorité sur les dimensions Justice & Équité et Transparence',
+        'Formation des équipes sur les principes de l\'IA responsable'
+      );
+    }
+    
+    // Dimension-specific recommendations
+    for (const [dimId, result] of Object.entries(dimensionResults)) {
+      if (result.score < 70) {
+        recommendations.push(...result.overallImprovements);
+      }
+    }
+    
+    return recommendations.slice(0, 8); // Top 8 recommendations
+  }
+
+  private getStrategyStrengths(strategy: string, score: number): string[] {
+    if (score < 60) return [];
+    
+    const strengthsMap: Record<string, string[]> = {
+      'data_biases_identified_mitigated': ['Processus d\'identification des biais fonctionnel', 'Documentation des biais existante'],
+      'algorithmic_transparency': ['Algorithmes documentés', 'Processus transparent'],
+      // Add more...
+    };
+    
+    return strengthsMap[strategy] || ['Performance satisfaisante'];
+  }
+
+  private getStrategyImprovements(strategy: string, score: number): string[] {
+    if (score >= 80) return [];
+    
+    const improvementsMap: Record<string, string[]> = {
+      'data_biases_identified_mitigated': ['Automatiser la détection de biais', 'Élargir l\'analyse à plus de variables'],
+      'algorithmic_transparency': ['Améliorer la documentation technique', 'Ajouter des explications pour les non-experts'],
+      // Add more...
+    };
+    
+    return improvementsMap[strategy] || ['Améliorer selon les bonnes pratiques'];
+  }
+
+  private getDimensionStrengths(dimensionId: string, score: number): string[] {
+    if (score < 70) return [];
+    
+    const strengthsMap: Record<string, string[]> = {
+      'justice_fairness': ['Processus équitables en place', 'Sensibilisation aux biais'],
+      'transparency_explainability': ['Documentation accessible', 'Processus transparent'],
+      // Add more...
+    };
+    
+    return strengthsMap[dimensionId] || ['Performance dimensionnelle satisfaisante'];
+  }
+
+  private getDimensionImprovements(dimensionId: string, score: number): string[] {
+    if (score >= 80) return [];
+    
+    const improvementsMap: Record<string, string[]> = {
+      'justice_fairness': ['Renforcer la surveillance des biais', 'Améliorer l\'engagement des parties prenantes'],
+      'transparency_explainability': ['Développer des explications automatiques', 'Former les utilisateurs'],
+      // Add more...
+    };
+    
+    return improvementsMap[dimensionId] || ['Améliorer cette dimension'];
+  }
+
+  // Enhanced assessment combining EU AI Act + Framework v3.0
+  async assessCombined(formData: RiskAssessmentFormData): Promise<RiskAssessmentResult> {
+    // 1. EU AI Act Classification (Tier 1)
+    const legacyFormData = this.convertToLegacyFormat(formData);
+    const euAiActClassification = this.classifyEUAIAct(legacyFormData);
+    
+    // 2. Framework v3.0 Assessment (Tier 2)
+    const frameworkData: FrameworkAssessmentData = {
+      systemName: formData.systemName,
+      organizationName: formData.organizationName,
+      industrySector: formData.industrySector,
+      primaryUseCase: formData.primaryUseCase,
+      systemDescription: formData.systemDescription,
+      responses: formData.frameworkResponses
+    };
+    
+    const frameworkResult = await this.assessFrameworkV3(frameworkData);
+    
+    // 3. Combine results
+    const riskScore = this.calculateCombinedRiskScore(euAiActClassification.riskLevel, frameworkResult.overallScore);
+    const riskLevel = this.determineFinalRiskLevel(euAiActClassification.riskLevel, frameworkResult.customerRisk);
+    
+    // 4. Generate combined reasoning
+    const reasoning = await this.generateCombinedReasoning(euAiActClassification, frameworkResult);
+    
+    return {
+      euAiActRiskLevel: euAiActClassification.riskLevel,
+      euAiActClassification: {
+        reasoning: euAiActClassification.reasoning,
+        applicableArticles: euAiActClassification.applicableArticles,
+        isHighRiskDomain: euAiActClassification.isHighRiskDomain,
+        highRiskDomains: euAiActClassification.highRiskDomains
+      },
+      dimensionScores: frameworkResult.dimensionResults,
+      overallFrameworkScore: frameworkResult.overallScore,
+      riskLevel,
+      riskScore,
+      reasoning,
+      applicableObligations: this.getObligations(euAiActClassification.riskLevel, legacyFormData),
+      complianceGaps: this.identifyComplianceGaps(euAiActClassification, frameworkResult),
+      complianceScore: this.calculateComplianceScore(euAiActClassification, frameworkResult),
+      recommendations: [...frameworkResult.recommendations],
+      actionPlan: this.generateCombinedActionPlan(euAiActClassification, frameworkResult),
+      priorityActions: frameworkResult.priorityActions.map(action => action.action),
+      assessmentVersion: '3.0'
+    };
+  }
+
+  private convertToLegacyFormat(formData: RiskAssessmentFormData): AssessmentFormData {
+    return {
+      systemName: formData.systemName,
+      sector: formData.industrySector || 'technology_software',
+      description: formData.systemDescription,
+      sensitiveData: formData.sensitiveData,
+      discriminationRisk: formData.discriminationRisk,
+      userInformed: formData.userInformed,
+      explainabilityLevel: formData.explainabilityLevel,
+      humanOversight: formData.humanOversight,
+      overrideCapability: formData.overrideCapability,
+      autonomyLevel: formData.autonomyLevel,
+      safetyImpact: formData.safetyImpact,
+      decisionConsequences: formData.decisionConsequences,
+      applicationDomain: formData.applicationDomain,
+      userCategories: formData.userCategories,
+      geographicalScope: formData.geographicalScope
+    };
+  }
+
+  private calculateCombinedRiskScore(euLevel: string, frameworkScore: number): number {
+    const euWeight = 0.6; // EU AI Act gets 60% weight
+    const frameworkWeight = 0.4; // Framework gets 40% weight
+    
+    const euScore = this.euLevelToScore(euLevel);
+    return Math.round(euScore * euWeight + (100 - frameworkScore) * frameworkWeight);
+  }
+
+  private euLevelToScore(level: string): number {
+    const map = { 'minimal': 20, 'limited': 40, 'high': 70, 'unacceptable': 100 };
+    return map[level as keyof typeof map] || 20;
+  }
+
+  private determineFinalRiskLevel(euLevel: string, frameworkRisk: string): 'minimal' | 'limited' | 'high' | 'unacceptable' {
+    // EU AI Act classification takes precedence
+    if (euLevel === 'unacceptable') return 'unacceptable';
+    if (euLevel === 'high') return 'high';
+    
+    // For lower EU levels, consider framework risk
+    if (frameworkRisk === 'critical') return euLevel === 'limited' ? 'high' : 'limited';
+    if (frameworkRisk === 'high') return euLevel === 'minimal' ? 'limited' : euLevel as any;
+    
+    return euLevel as any;
+  }
+
+  private async generateCombinedReasoning(euClassification: any, frameworkResult: FrameworkAssessmentResult): Promise<string> {
+    return `Classification EU AI Act: ${euClassification.reasoning}\n\nÉvaluation Framework Positive AI v3.0: Score global de ${frameworkResult.overallScore}/100 (${frameworkResult.overallLevel}). Les dimensions nécessitant une attention particulière sont celles avec des scores inférieurs à 70/100.`;
+  }
+
+  private identifyComplianceGaps(euClassification: any, frameworkResult: FrameworkAssessmentResult): Array<{
+    gap: string;
+    severity: 'critical' | 'high' | 'medium' | 'low';
+    recommendation: string;
+  }> {
+    const gaps: Array<any> = [];
+    
+    // EU AI Act compliance gaps
+    if (euClassification.riskLevel === 'high') {
+      gaps.push({
+        gap: 'Système haute risque - Conformité EU AI Act requise',
+        severity: 'critical' as const,
+        recommendation: 'Mettre en place toutes les obligations du Titre III Chapitre 2'
+      });
+    }
+    
+    // Framework gaps based on low scores
+    for (const [dimId, result] of Object.entries(frameworkResult.dimensionResults)) {
+      if (result.score < 60) {
+        gaps.push({
+          gap: `Dimension ${dimId}: Score ${result.score}/100`,
+          severity: result.score < 40 ? 'critical' as const : 'high' as const,
+          recommendation: `Améliorer les pratiques de ${dimId}`
+        });
+      }
+    }
+    
+    return gaps;
+  }
+
+  private calculateComplianceScore(euClassification: any, frameworkResult: FrameworkAssessmentResult): number {
+    // Compliance score based on EU level and framework performance
+    const euCompliance = euClassification.riskLevel === 'unacceptable' ? 0 : 
+                        euClassification.riskLevel === 'high' ? 40 :
+                        euClassification.riskLevel === 'limited' ? 70 : 90;
+    
+    return Math.round((euCompliance + frameworkResult.overallScore) / 2);
+  }
+
+  private generateCombinedActionPlan(euClassification: any, frameworkResult: FrameworkAssessmentResult): {
+    immediate: Array<{ action: string; priority: 'critical' | 'high' | 'medium'; timeline: string }>;
+    short_term: Array<{ action: string; priority: 'critical' | 'high' | 'medium'; timeline: string }>;
+    long_term: Array<{ action: string; priority: 'critical' | 'high' | 'medium'; timeline: string }>;
+  } {
+    const immediate: Array<any> = [];
+    const short_term: Array<any> = [];
+    const long_term: Array<any> = [];
+    
+    // EU AI Act immediate actions
+    if (euClassification.riskLevel === 'unacceptable') {
+      immediate.push({
+        action: 'Cessation immédiate du système',
+        priority: 'critical' as const,
+        timeline: 'Immédiat'
+      });
+    } else if (euClassification.riskLevel === 'high') {
+      immediate.push({
+        action: 'Évaluation de conformité EU AI Act',
+        priority: 'critical' as const,
+        timeline: '2 semaines'
+      });
+    }
+    
+    // Framework priority actions
+    for (const action of frameworkResult.priorityActions) {
+      if (action.priority === 'critical') {
+        immediate.push(action);
+      } else if (action.priority === 'high') {
+        short_term.push(action);
+      } else {
+        long_term.push(action);
+      }
+    }
+    
+    return { immediate, short_term, long_term };
+  }
+
+  // ✅ NEW: Enhanced save for Framework v3.0 assessments
+  async saveEnhancedAssessment(
+    formData: RiskAssessmentFormData,
+    result: RiskAssessmentResult,
+    userId: string
+  ): Promise<{ aiSystemId: string; assessmentId: string }> {
+    // Create or update AI system
+    const aiSystemData: InsertAiSystem = {
+      userId,
+      name: formData.systemName,
+      description: formData.systemDescription,
+      sector: formData.industrySector,
+      riskLevel: result.riskLevel,
+      status: 'draft',
+      assessmentData: formData as any,
+      complianceScore: result.complianceScore,
+      lastAssessed: new Date(),
+    };
+
+    const aiSystem = await storage.createAiSystem(aiSystemData);
+
+    // Create enhanced risk assessment record
+    const assessmentData: InsertRiskAssessment = {
+      aiSystemId: aiSystem.id,
+      userId,
+      systemName: formData.systemName,
+      organizationName: formData.organizationName,
+      industrySector: formData.industrySector as any,
+      primaryUseCase: formData.primaryUseCase as any,
+      systemDescription: formData.systemDescription,
+      
+      // EU AI Act data
+      euAiActRiskLevel: result.euAiActRiskLevel,
+      euAiActClassification: result.euAiActClassification,
+      isHighRiskDomain: result.euAiActClassification.isHighRiskDomain,
+      highRiskDomains: result.euAiActClassification.highRiskDomains,
+      
+      // Framework v3.0 data
+      frameworkResponses: formData.frameworkResponses || {},
+      dimensionScores: result.dimensionScores,
+      overallFrameworkScore: result.overallFrameworkScore,
+      
+      // Combined results
+      formData: formData as any,
+      riskScore: result.riskScore,
+      riskLevel: result.riskLevel,
+      reasoning: result.reasoning,
+      
+      // Compliance data
+      applicableObligations: result.applicableObligations,
+      complianceGaps: result.complianceGaps,
+      complianceScore: result.complianceScore,
+      
+      // Recommendations
+      recommendations: result.recommendations,
+      actionPlan: result.actionPlan,
+      priorityActions: result.priorityActions,
+      
+      assessmentVersion: result.assessmentVersion
     };
 
     const assessment = await storage.createRiskAssessment(assessmentData);

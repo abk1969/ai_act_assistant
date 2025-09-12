@@ -56,6 +56,44 @@ export const aiFrameworkDimensionEnum = pgEnum('ai_framework_dimension', [
   'technical_robustness_security'
 ]);
 
+// Framework v3.0 strategies enum for each dimension
+export const frameworkStrategyEnum = pgEnum('framework_strategy', [
+  // Justice & Fairness strategies
+  'data_biases_identified_mitigated',
+  'design_biases_identified_mitigated',
+  'biased_results_identified_mitigated',
+  'bias_monitoring',
+  'stakeholder_engagement',
+  // Transparency & Explainability strategies
+  'algorithmic_transparency',
+  'decision_transparency',
+  'process_transparency',
+  // Human-AI Interaction strategies
+  'human_oversight_control',
+  'meaningful_human_control',
+  'user_empowerment',
+  // Social & Environmental Impact strategies
+  'sustainably_developed_by_design',
+  'promoting_positive_outcomes',
+  'avoidance_of_societal_harms',
+  // Responsibility strategies
+  'collection_data_traceable_requirements',
+  'license_of_data',
+  'protected_from_disclosure',
+  'approaches_privacy_preservation',
+  'accountability_governance',
+  // Data & Privacy strategies
+  'data_minimization',
+  'purpose_limitation',
+  'consent_management',
+  'security_protection',
+  'rights_management',
+  // Technical Robustness & Security strategies
+  'accuracy_reliability',
+  'fallback_procedures',
+  'security_resilience'
+]);
+
 // Risk assessment levels for framework dimensions (0 to 4 stars)
 export const frameworkRiskLevelEnum = pgEnum('framework_risk_level', ['none', 'minimal', 'moderate', 'high', 'critical']);
 
@@ -268,11 +306,14 @@ export const maturityAssessments = pgTable("maturity_assessments", {
 export const frameworkQuestions = pgTable("framework_questions", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   dimension: aiFrameworkDimensionEnum("dimension").notNull(),
+  strategyKey: frameworkStrategyEnum("strategy_key").notNull(), // Strategy identifier
   questionId: varchar("question_id").notNull().unique(), // e.g., "justice_1", "transparency_3" 
-  strategy: text("strategy").notNull(), // Strategy from framework
+  strategy: text("strategy").notNull(), // Strategy name from framework
   question: text("question").notNull(), // Evaluation question
   correspondingAction: text("corresponding_action"), // Required action
   tools: jsonb("tools"), // Suggested tools (array)
+  customerRiskLevel: frameworkRiskLevelEnum("customer_risk_level"), // Risk level for customer-facing
+  employeeRiskLevel: frameworkRiskLevelEnum("employee_risk_level"), // Risk level for employee-facing  
   projectPhase: varchar("project_phase"), // When to implement
   weight: integer("weight").default(10), // Question weight (1-100)
   isActive: boolean("is_active").default(true),
@@ -575,3 +616,77 @@ export type FrameworkQuestion = typeof frameworkQuestions.$inferSelect;
 export type InsertFrameworkQuestion = z.infer<typeof insertFrameworkQuestionSchema>;
 export type UseCaseRiskMapping = typeof useCaseRiskMapping.$inferSelect;
 export type InsertUseCaseRiskMapping = z.infer<typeof insertUseCaseRiskMappingSchema>;
+
+// Enhanced Framework v3.0 types
+export interface FrameworkDimension {
+  id: string;
+  name: string;
+  description: string;
+  strategies: FrameworkStrategy[];
+}
+
+export interface FrameworkStrategy {
+  id: string;
+  key: string;
+  name: string;
+  description: string;
+  questions: FrameworkQuestionData[];
+}
+
+export interface FrameworkQuestionData {
+  id: string;
+  questionId: string;
+  text: string;
+  correspondingAction: string;
+  tools: string[];
+  customerRiskLevel: 'none' | 'minimal' | 'moderate' | 'high' | 'critical';
+  employeeRiskLevel: 'none' | 'minimal' | 'moderate' | 'high' | 'critical';
+  projectPhase: string;
+  weight: number;
+}
+
+export interface FrameworkAssessmentData {
+  systemName: string;
+  organizationName: string;
+  industrySector?: string;
+  primaryUseCase?: string;
+  systemDescription?: string;
+  // Responses per dimension and strategy
+  responses: Record<string, Record<string, number>>; // dimension -> questionId -> response (1-5)
+}
+
+export interface FrameworkAssessmentResult {
+  // Dimension scores and analysis
+  dimensionResults: Record<string, {
+    score: number; // 0-100
+    level: 'excellent' | 'good' | 'adequate' | 'needs_improvement' | 'critical';
+    strategyResults: Record<string, {
+      score: number;
+      level: 'excellent' | 'good' | 'adequate' | 'needs_improvement' | 'critical';
+      strengths: string[];
+      improvements: string[];
+    }>;
+    overallStrengths: string[];
+    overallImprovements: string[];
+  }>;
+  
+  // Overall assessment
+  overallScore: number; // 0-100 weighted average
+  overallLevel: 'excellent' | 'good' | 'adequate' | 'needs_improvement' | 'critical';
+  
+  // Risk analysis
+  customerRisk: 'none' | 'minimal' | 'moderate' | 'high' | 'critical';
+  employeeRisk: 'none' | 'minimal' | 'moderate' | 'high' | 'critical';
+  
+  // Recommendations
+  priorityActions: Array<{
+    dimension: string;
+    strategy: string;
+    action: string;
+    priority: 'critical' | 'high' | 'medium';
+    timeline: string;
+  }>;
+  
+  recommendations: string[];
+  assessmentVersion: string;
+}

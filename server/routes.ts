@@ -7,7 +7,7 @@ import { complianceService } from "./services/complianceService";
 import { regulatoryService } from "./services/regulatoryService";
 import { llmService } from "./services/llmService";
 import { maturityService } from "./services/maturityService";
-import { insertAiSystemSchema, insertRiskAssessmentSchema, insertLlmSettingsSchema } from "@shared/schema";
+import { insertAiSystemSchema, insertRiskAssessmentSchema, insertLlmSettingsSchema, insertComplianceCertificateSchema } from "@shared/schema";
 import { z } from "zod";
 
 export async function registerRoutes(app: Express): Promise<Server> {
@@ -94,8 +94,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Perform risk assessment
       const result = await assessmentService.performRiskAssessment(formData, userId);
       
-      // Save assessment
-      const saved = await assessmentService.saveAssessment(formData, result, userId);
+      // Save assessment - handle both legacy and new formats
+      let saved;
+      if ('applicableObligations' in result) {
+        // New Framework v3.0 format - needs enhanced saveAssessment
+        saved = await assessmentService.saveEnhancedAssessment(formData, result as any, userId);
+      } else {
+        // Legacy format
+        saved = await assessmentService.saveAssessment(formData, result as any, userId);
+      }
       
       res.status(201).json({
         ...result,
