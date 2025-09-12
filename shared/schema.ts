@@ -125,17 +125,50 @@ export const aiSystems = pgTable("ai_systems", {
   updatedAt: timestamp("updated_at").defaultNow(),
 });
 
-// Risk assessments table
+// Risk assessments table (Extended for Positive AI Framework v3.0 + EU AI Act)
 export const riskAssessments = pgTable("risk_assessments", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   aiSystemId: varchar("ai_system_id").notNull().references(() => aiSystems.id),
   userId: varchar("user_id").notNull().references(() => users.id),
-  formData: jsonb("form_data").notNull(),
-  riskScore: integer("risk_score"),
-  riskLevel: riskLevelEnum("risk_level"),
+  // Basic system information
+  systemName: varchar("system_name").notNull(),
+  organizationName: varchar("organization_name").notNull(),
+  industrySector: industrySectorEnum("industry_sector"),
+  primaryUseCase: aiUseCaseEnum("primary_use_case"),
+  systemDescription: text("system_description"),
+  
+  // EU AI Act Classification (Tier 1)
+  euAiActRiskLevel: riskLevelEnum("eu_ai_act_risk_level").notNull(),
+  euAiActClassification: jsonb("eu_ai_act_classification"), // Details on why classified as this level
+  isHighRiskDomain: boolean("is_high_risk_domain").default(false),
+  highRiskDomains: jsonb("high_risk_domains"), // Array of applicable domains from Annex III
+  
+  // Positive AI Framework v3.0 Assessment (Tier 2) 
+  frameworkResponses: jsonb("framework_responses").notNull(), // Question responses per dimension
+  dimensionScores: jsonb("dimension_scores").notNull(), // Score 0-100 for each of 7 dimensions  
+  overallFrameworkScore: integer("overall_framework_score"), // Weighted average 0-100
+  
+  // Combined Risk Assessment Result
+  formData: jsonb("form_data").notNull(), // Full form data for reference
+  riskScore: integer("risk_score"), // Combined risk score 0-100
+  riskLevel: riskLevelEnum("risk_level"), // Final risk level considering both tiers
+  reasoning: text("reasoning"), // AI-generated explanation
+  
+  // EU AI Act Compliance
+  applicableObligations: jsonb("applicable_obligations"), // Array of obligations
+  complianceGaps: jsonb("compliance_gaps"), // Identified non-compliance issues
+  complianceScore: integer("compliance_score"), // 0-100 compliance rating
+  
+  // Recommendations and Action Plan
   recommendations: jsonb("recommendations"),
+  actionPlan: jsonb("action_plan"), // Structured timeline: immediate, short_term, long_term
+  priorityActions: jsonb("priority_actions"), // High-priority items
+  
+  // Assessment Metadata
+  assessmentVersion: varchar("assessment_version").default('3.0'), // Framework version used
   completedAt: timestamp("completed_at").defaultNow(),
   createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
 });
 
 // EU AI Act articles database
@@ -385,7 +418,9 @@ export const insertAiSystemSchema = createInsertSchema(aiSystems).omit({
 
 export const insertRiskAssessmentSchema = createInsertSchema(riskAssessments).omit({
   id: true,
+  completedAt: true,
   createdAt: true,
+  updatedAt: true,
 });
 
 export const insertComplianceRecordSchema = createInsertSchema(complianceRecords).omit({
@@ -437,6 +472,93 @@ export type AiSystem = typeof aiSystems.$inferSelect;
 export type InsertAiSystem = z.infer<typeof insertAiSystemSchema>;
 export type RiskAssessment = typeof riskAssessments.$inferSelect;
 export type InsertRiskAssessment = z.infer<typeof insertRiskAssessmentSchema>;
+
+// New interfaces for Enhanced Risk Assessment (EU AI Act + Framework v3.0)
+export interface RiskAssessmentFormData {
+  // Basic Information (Required)
+  systemName: string;
+  organizationName: string;
+  industrySector?: string;
+  primaryUseCase?: string;
+  systemDescription?: string;
+  
+  // Framework Questions (Per dimension - 7 dimensions x ~3 questions each)
+  frameworkResponses: Record<string, number>; // questionId -> response (1-5)
+  
+  // EU AI Act Specific Questions
+  sensitiveData: 'yes' | 'limited' | 'no';
+  discriminationRisk: 'high' | 'medium' | 'low';
+  userInformed: 'full' | 'partial' | 'none';
+  explainabilityLevel: 'high' | 'medium' | 'low';
+  humanOversight: 'full' | 'intermittent' | 'minimal';
+  overrideCapability: 'yes' | 'limited' | 'no';
+  autonomyLevel: 'high' | 'medium' | 'low';
+  safetyImpact: 'critical' | 'significant' | 'minimal';
+  decisionConsequences: 'irreversible' | 'reversible' | 'advisory';
+  applicationDomain: string;
+  userCategories: string[];
+  geographicalScope: 'eu' | 'national' | 'local';
+}
+
+export interface RiskAssessmentResult {
+  // EU AI Act Classification (Tier 1)
+  euAiActRiskLevel: 'minimal' | 'limited' | 'high' | 'unacceptable';
+  euAiActClassification: {
+    reasoning: string;
+    applicableArticles: string[];
+    isHighRiskDomain: boolean;
+    highRiskDomains?: string[];
+  };
+  
+  // Framework Scoring (Tier 2) 
+  dimensionScores: Record<string, {
+    score: number; // 0-100
+    level: 'excellent' | 'good' | 'adequate' | 'needs_improvement' | 'critical';
+    strengths: string[];
+    improvements: string[];
+  }>;
+  overallFrameworkScore: number; // 0-100
+  
+  // Combined Assessment
+  riskLevel: 'minimal' | 'limited' | 'high' | 'unacceptable';
+  riskScore: number; // 0-100 combined score
+  reasoning: string;
+  
+  // Compliance and Obligations
+  applicableObligations: string[];
+  complianceGaps: Array<{
+    gap: string;
+    severity: 'critical' | 'high' | 'medium' | 'low';
+    recommendation: string;
+  }>;
+  complianceScore: number; // 0-100
+  
+  // Action Plan
+  recommendations: string[];
+  actionPlan: {
+    immediate: Array<{
+      action: string;
+      priority: 'critical' | 'high' | 'medium';
+      timeline: string;
+    }>;
+    short_term: Array<{
+      action: string;
+      priority: 'critical' | 'high' | 'medium';
+      timeline: string;
+    }>;
+    long_term: Array<{
+      action: string;
+      priority: 'critical' | 'high' | 'medium';
+      timeline: string;
+    }>;
+  };
+  priorityActions: string[];
+  
+  // Metadata
+  assessmentVersion: string;
+  aiSystemId?: string;
+  assessmentId?: string;
+}
 export type AiActArticle = typeof aiActArticles.$inferSelect;
 export type ComplianceRecord = typeof complianceRecords.$inferSelect;
 export type InsertComplianceRecord = z.infer<typeof insertComplianceRecordSchema>;
