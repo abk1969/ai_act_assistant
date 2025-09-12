@@ -127,7 +127,32 @@ export async function setupAuth(app: Express) {
   });
 }
 
+// Test mode middleware for Playwright tests
+const testModeUser = {
+  claims: {
+    sub: "test-user-id",
+    email: "test@test.com",
+    first_name: "Test",
+    last_name: "User",
+    exp: Math.floor(Date.now() / 1000) + 3600 // 1 hour from now
+  },
+  expires_at: Math.floor(Date.now() / 1000) + 3600
+};
+
 export const isAuthenticated: RequestHandler = async (req, res, next) => {
+  // TEST MODE: Skip authentication entirely when TEST_MODE=true
+  if (process.env.TEST_MODE === 'true') {
+    // SECURITY: Only allow in development, never in production
+    if (process.env.NODE_ENV === 'production') {
+      console.error('SECURITY ERROR: TEST_MODE cannot be enabled in production!');
+      return res.status(500).json({ message: "Internal server error" });
+    }
+    
+    console.log('TEST_MODE enabled: injecting mock user for testing');
+    req.user = testModeUser;
+    return next();
+  }
+
   const user = req.user as any;
 
   if (!req.isAuthenticated() || !user.expires_at) {

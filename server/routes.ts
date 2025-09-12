@@ -81,6 +81,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.status(201).json(system);
     } catch (error) {
       console.error("Error creating AI system:", error);
+      
+      // Return 400 for Zod validation errors, 500 for other errors
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ 
+          message: "Validation error", 
+          errors: error.errors 
+        });
+      }
+      
       res.status(500).json({ message: "Failed to create AI system" });
     }
   });
@@ -111,7 +120,21 @@ export async function registerRoutes(app: Express): Promise<Server> {
       });
     } catch (error) {
       console.error("Error performing risk assessment:", error);
-      res.status(500).json({ message: "Failed to perform risk assessment" });
+      console.error("Error stack:", error instanceof Error ? error.stack : 'No stack trace');
+      console.error("Form data received:", formData);
+      
+      // Return 400 for Zod validation errors, 500 for other errors
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ 
+          message: "Validation error", 
+          errors: error.errors 
+        });
+      }
+      
+      res.status(500).json({ 
+        message: "Failed to perform risk assessment",
+        error: error instanceof Error ? error.message : String(error)
+      });
     }
   });
 
@@ -535,6 +558,15 @@ Le registre doit contenir:
       res.json(sanitizedSettings);
     } catch (error) {
       console.error("Error saving LLM settings:", error);
+      
+      // Return 400 for Zod validation errors, 500 for other errors
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ 
+          message: "Validation error", 
+          errors: error.errors 
+        });
+      }
+      
       res.status(500).json({ message: "Failed to save LLM settings" });
     }
   });
