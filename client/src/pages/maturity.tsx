@@ -122,6 +122,7 @@ interface MaturityAssessmentResult {
 
 export default function MaturityPage() {
   const [currentStep, setCurrentStep] = useState<'form' | 'result'>('form');
+  const [activeTab, setActiveTab] = useState<string>('justice_fairness');
   const [formData, setFormData] = useState<MaturityFormData>({
     organizationName: '',
     industrySector: undefined,
@@ -258,15 +259,48 @@ export default function MaturityPage() {
     return configs[level as keyof typeof configs] || configs.initial;
   };
 
-  const getDomainIcon = (domain: string) => {
+  const getDimensionIcon = (dimension: string) => {
     const icons = {
-      'strategy': Brain,
-      'governance': Shield,
-      'ethics': Users,
-      'capabilities': Settings
+      'justice_fairness': <Users className="h-4 w-4" />,
+      'transparency_explainability': <Lightbulb className="h-4 w-4" />, 
+      'human_ai_interaction': <Brain className="h-4 w-4" />,
+      'social_environmental_impact': <TrendingUp className="h-4 w-4" />,
+      'responsibility': <Shield className="h-4 w-4" />,
+      'data_privacy': <Settings className="h-4 w-4" />,
+      'technical_robustness_security': <CheckCircle className="h-4 w-4" />
     };
-    return icons[domain as keyof typeof icons] || Settings;
+    return icons[dimension as keyof typeof icons] || <Settings className="h-4 w-4" />;
   };
+
+  const getDimensionLabel = (dimension: string) => {
+    const labels = {
+      'justice_fairness': 'Justice et équité',
+      'transparency_explainability': 'Transparence et explicabilité', 
+      'human_ai_interaction': 'Interaction humaine et IA',
+      'social_environmental_impact': 'Impact social et environnemental',
+      'responsibility': 'Responsabilité',
+      'data_privacy': 'Données et vie privée',
+      'technical_robustness_security': 'Robustesse technique et sécurité'
+    };
+    return labels[dimension as keyof typeof labels] || dimension.charAt(0).toUpperCase() + dimension.slice(1);
+  };
+
+  // Legacy compatibility for old domain names
+  const getDomainIcon = (domain: string) => getDimensionIcon(domain);
+
+  const getAnsweredCount = (domainName: string) => {
+    if (!framework) return 0;
+    const domain = framework.find(d => d.name === domainName);
+    if (!domain) return 0;
+    return domain.questions.filter(q => formData.responses[q.id] !== undefined).length;
+  };
+
+  // Set first dimension as active tab when framework loads
+  useEffect(() => {
+    if (framework && framework.length > 0 && activeTab === 'justice_fairness') {
+      setActiveTab(framework[0].name);
+    }
+  }, [framework, activeTab]);
 
   const getPriorityColor = (priority: 'high' | 'medium' | 'low') => {
     switch (priority) {
@@ -366,66 +400,98 @@ export default function MaturityPage() {
               </Select>
             </div>
 
-            {/* Questions by Domain */}
-            {framework?.map((domain) => {
-              const DomainIcon = getDomainIcon(domain.name);
-              return (
-                <Card key={domain.name}>
-                  <CardHeader>
-                    <CardTitle className="flex items-center gap-2 text-lg">
-                      <DomainIcon className="h-5 w-5" />
-                      {domain.description}
-                    </CardTitle>
-                  </CardHeader>
-                  <CardContent className="space-y-6">
-                    {domain.questions.map((question) => (
-                      <div key={question.id} className="space-y-3">
-                        <Label className="text-base font-medium">{question.question}</Label>
-                        <div className="space-y-2">
-                          {question.options.map((option) => (
-                            <div key={option.value} className="flex items-start space-x-3">
-                              <input
-                                type="radio"
-                                id={`${question.id}-${option.value}`}
-                                name={question.id}
-                                value={option.value}
-                                checked={formData.responses[question.id] === option.value}
-                                onChange={(e) => {
-                                  e.preventDefault();
-                                  e.stopPropagation();
-                                  handleResponseChange(question.id, option.value);
-                                }}
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  handleResponseChange(question.id, option.value);
-                                }}
-                                className="mt-1"
-                                data-testid={`radio-${question.id}-${option.value}`}
-                              />
-                              <div className="space-y-1">
-                                <label 
-                                  htmlFor={`${question.id}-${option.value}`}
-                                  className="text-sm font-medium cursor-pointer"
-                                  onClick={(e) => {
-                                    e.preventDefault();
-                                    handleResponseChange(question.id, option.value);
-                                  }}
-                                >
-                                  {option.label}
-                                </label>
-                                <p className="text-xs text-muted-foreground">
-                                  {option.description}
-                                </p>
-                              </div>
-                            </div>
-                          ))}
+            {/* Framework Questions with Tabs Navigation */}
+            {framework && (
+              <Tabs value={activeTab} onValueChange={setActiveTab} className="mt-6">
+                <TabsList className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-7 gap-2 h-auto p-1 bg-muted">
+                  {framework.map((domain) => (
+                    <TabsTrigger 
+                      key={domain.name}
+                      value={domain.name}
+                      className="flex flex-col gap-2 h-auto py-3 text-center min-h-[80px] data-[state=active]:bg-background"
+                      data-testid={`tab-${domain.name}`}
+                    >
+                      <div className="p-1 rounded bg-blue-100 dark:bg-blue-900">
+                        {getDimensionIcon(domain.name)}
+                      </div>
+                      <span className="text-xs font-medium leading-tight">
+                        {getDimensionLabel(domain.name).split(' ').map((word, i) => (
+                          <span key={i} className="block">{word}</span>
+                        ))}
+                      </span>
+                      <Badge variant="outline" className="text-[10px] px-1 py-0">
+                        {getAnsweredCount(domain.name)}/{domain.questions.length}
+                      </Badge>
+                    </TabsTrigger>
+                  ))}
+                </TabsList>
+
+                {framework.map((domain) => (
+                  <TabsContent key={domain.name} value={domain.name}>
+                    <Card className="p-6">
+                      <div className="flex items-center gap-3 mb-4">
+                        <div className="p-2 rounded-lg bg-blue-100 dark:bg-blue-900">
+                          {getDimensionIcon(domain.name)}
+                        </div>
+                        <div>
+                          <h3 className="text-lg font-semibold">{getDimensionLabel(domain.name)}</h3>
+                          <Badge variant="outline" className="mt-1">
+                            {getAnsweredCount(domain.name)}/{domain.questions.length} répondues
+                          </Badge>
                         </div>
                       </div>
-                    ))}
-                  </CardContent>
-                </Card>
-              );
-            })}
+                      
+                      <div className="space-y-6">
+                        {domain.questions.map((question) => (
+                          <div key={question.id} className="space-y-3">
+                            <Label className="text-base font-medium">{question.question}</Label>
+                            <div className="space-y-2">
+                              {question.options.map((option) => (
+                                <div key={option.value} className="flex items-start space-x-3">
+                                  <input
+                                    type="radio"
+                                    id={`${question.id}-${option.value}`}
+                                    name={question.id}
+                                    value={option.value}
+                                    checked={formData.responses[question.id] === option.value}
+                                    onChange={(e) => {
+                                      e.preventDefault();
+                                      e.stopPropagation();
+                                      handleResponseChange(question.id, option.value);
+                                    }}
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      handleResponseChange(question.id, option.value);
+                                    }}
+                                    className="mt-1"
+                                    data-testid={`radio-${question.id}-${option.value}`}
+                                  />
+                                  <div className="space-y-1">
+                                    <label 
+                                      htmlFor={`${question.id}-${option.value}`}
+                                      className="text-sm font-medium cursor-pointer"
+                                      onClick={(e) => {
+                                        e.preventDefault();
+                                        handleResponseChange(question.id, option.value);
+                                      }}
+                                    >
+                                      {option.label}
+                                    </label>
+                                    <p className="text-xs text-muted-foreground">
+                                      {option.description}
+                                    </p>
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </Card>
+                  </TabsContent>
+                ))}
+              </Tabs>
+            )}
 
             {/* Submit Button */}
             <div className="flex justify-center pt-6">
@@ -489,13 +555,12 @@ export default function MaturityPage() {
                 <TabsContent value="domains" className="space-y-4">
                   <div className="grid gap-4 md:grid-cols-2">
                     {Object.entries(assessmentResult.domainScores).map(([domain, data]) => {
-                      const DomainIcon = getDomainIcon(domain);
                       return (
                         <Card key={domain}>
                           <CardHeader>
                             <CardTitle className="flex items-center gap-2 text-lg">
-                              <DomainIcon className="h-5 w-5" />
-                              {domain.charAt(0).toUpperCase() + domain.slice(1)}
+                              {getDimensionIcon(domain)}
+                              {getDimensionLabel(domain)}
                               <Badge variant={data.score >= 60 ? 'default' : 'secondary'}>
                                 {data.score}/100
                               </Badge>
