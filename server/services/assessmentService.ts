@@ -1,7 +1,13 @@
 import { storage } from "../storage";
 import { llmService } from "./llmService";
-import type { InsertRiskAssessment, InsertAiSystem } from "@shared/schema";
+import type { 
+  InsertRiskAssessment, 
+  InsertAiSystem, 
+  RiskAssessmentFormData,
+  RiskAssessmentResult
+} from "@shared/schema";
 
+// Legacy interface kept for backward compatibility during migration
 export interface AssessmentFormData {
   // Basic Information
   systemName: string;
@@ -31,7 +37,8 @@ export interface AssessmentFormData {
   geographicalScope: 'eu' | 'national' | 'local';
 }
 
-export interface RiskAssessmentResult {
+// Legacy interface kept for backward compatibility during migration
+export interface LegacyRiskAssessmentResult {
   riskLevel: 'minimal' | 'limited' | 'high' | 'unacceptable';
   riskScore: number; // 0-100
   reasoning: string;
@@ -48,7 +55,7 @@ class AssessmentService {
   async performRiskAssessment(
     formData: AssessmentFormData,
     userId: string
-  ): Promise<RiskAssessmentResult> {
+  ): Promise<LegacyRiskAssessmentResult> {
     // Calculate base risk score using Technical Framework v3.0 criteria
     const riskScore = this.calculateRiskScore(formData);
     const riskLevel = this.determineRiskLevel(riskScore, formData);
@@ -365,7 +372,7 @@ class AssessmentService {
 
   async saveAssessment(
     formData: AssessmentFormData,
-    result: RiskAssessmentResult,
+    result: LegacyRiskAssessmentResult,
     userId: string
   ): Promise<{ aiSystemId: string; assessmentId: string }> {
     // Create or update AI system
@@ -383,13 +390,21 @@ class AssessmentService {
 
     const aiSystem = await storage.createAiSystem(aiSystemData);
 
-    // Save detailed assessment
+    // Map legacy data to new risk assessment structure 
     const assessmentData: InsertRiskAssessment = {
       aiSystemId: aiSystem.id,
       userId,
+      // Required new fields
+      systemName: formData.systemName,
+      organizationName: `Organisation (${formData.systemName})`, // Temporary fallback
+      euAiActRiskLevel: result.riskLevel,
+      frameworkResponses: {}, // Empty for now - will be populated when implementing new form
+      dimensionScores: {}, // Empty for now - will be populated when implementing new form
+      // Legacy compatibility
       formData: formData as any,
       riskScore: result.riskScore,
       riskLevel: result.riskLevel,
+      reasoning: result.reasoning,
       recommendations: {
         reasoning: result.reasoning,
         obligations: result.obligations,

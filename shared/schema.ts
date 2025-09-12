@@ -131,21 +131,21 @@ export const riskAssessments = pgTable("risk_assessments", {
   aiSystemId: varchar("ai_system_id").notNull().references(() => aiSystems.id),
   userId: varchar("user_id").notNull().references(() => users.id),
   // Basic system information
-  systemName: varchar("system_name").notNull(),
-  organizationName: varchar("organization_name").notNull(),
+  systemName: varchar("system_name").notNull().default('System IA'),
+  organizationName: varchar("organization_name").notNull().default('Organisation'),
   industrySector: industrySectorEnum("industry_sector"),
   primaryUseCase: aiUseCaseEnum("primary_use_case"),
   systemDescription: text("system_description"),
   
   // EU AI Act Classification (Tier 1)
-  euAiActRiskLevel: riskLevelEnum("eu_ai_act_risk_level").notNull(),
+  euAiActRiskLevel: riskLevelEnum("eu_ai_act_risk_level").notNull().default('minimal'),
   euAiActClassification: jsonb("eu_ai_act_classification"), // Details on why classified as this level
   isHighRiskDomain: boolean("is_high_risk_domain").default(false),
   highRiskDomains: jsonb("high_risk_domains"), // Array of applicable domains from Annex III
   
   // Positive AI Framework v3.0 Assessment (Tier 2) 
-  frameworkResponses: jsonb("framework_responses").notNull(), // Question responses per dimension
-  dimensionScores: jsonb("dimension_scores").notNull(), // Score 0-100 for each of 7 dimensions  
+  frameworkResponses: jsonb("framework_responses").notNull().default('{}'), // Question responses per dimension
+  dimensionScores: jsonb("dimension_scores").notNull().default('{}'), // Score 0-100 for each of 7 dimensions  
   overallFrameworkScore: integer("overall_framework_score"), // Weighted average 0-100
   
   // Combined Risk Assessment Result
