@@ -2,7 +2,8 @@ import { useState } from "react";
 import { useLocation } from "wouter";
 import { LoginForm } from "./LoginForm";
 import { RegisterForm } from "./RegisterForm";
-import { Dialog, DialogContent, DialogTrigger } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogTrigger, DialogTitle, DialogDescription } from "@/components/ui/dialog";
+import { VisuallyHidden } from "@radix-ui/react-visually-hidden";
 import { Button } from "@/components/ui/button";
 
 type AuthMode = "login" | "register";
@@ -36,6 +37,17 @@ export function AuthModal({ defaultMode = "login", onSuccess, children }: AuthMo
         )}
       </DialogTrigger>
       <DialogContent className="p-0 border-0 bg-transparent shadow-none max-w-fit">
+        <VisuallyHidden>
+          <DialogTitle>
+            {mode === "login" ? "Connexion" : "Inscription"}
+          </DialogTitle>
+          <DialogDescription>
+            {mode === "login" 
+              ? "Connectez-vous à votre compte IA-ACT-NAVIGATOR"
+              : "Créez un nouveau compte IA-ACT-NAVIGATOR"
+            }
+          </DialogDescription>
+        </VisuallyHidden>
         {mode === "login" ? (
           <LoginForm
             onSuccess={handleSuccess}
