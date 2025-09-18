@@ -9,6 +9,27 @@ import type {
   FrameworkAssessmentResult
 } from "@shared/schema";
 
+// Normalized input interface for EU AI Act classification
+export interface EUAiActInput {
+  // System context
+  systemName: string;
+  sector: string;
+  applicationDomain: string;
+  userCategories: string[];
+  geographicalScope: 'eu' | 'national' | 'local';
+  
+  // Risk assessment signals
+  sensitiveData: 'yes' | 'limited' | 'no';
+  discriminationRisk: 'high' | 'medium' | 'low';
+  userInformed: 'full' | 'partial' | 'none';
+  explainabilityLevel: 'high' | 'medium' | 'low';
+  humanOversight: 'full' | 'intermittent' | 'minimal';
+  overrideCapability: 'yes' | 'limited' | 'no';
+  autonomyLevel: 'high' | 'medium' | 'low';
+  safetyImpact: 'critical' | 'significant' | 'minimal';
+  decisionConsequences: 'irreversible' | 'reversible' | 'advisory';
+}
+
 // Legacy interface kept for backward compatibility during migration
 export interface AssessmentFormData {
   // Basic Information
@@ -54,8 +75,77 @@ export interface LegacyRiskAssessmentResult {
 }
 
 class AssessmentService {
+  // Adaptateurs pour convertir vers EUAiActInput normalisé
+  private adaptFromLegacyFormat(formData: AssessmentFormData): EUAiActInput {
+    return {
+      systemName: formData.systemName,
+      sector: formData.sector,
+      applicationDomain: formData.applicationDomain,
+      userCategories: formData.userCategories,
+      geographicalScope: formData.geographicalScope,
+      sensitiveData: formData.sensitiveData,
+      discriminationRisk: formData.discriminationRisk,
+      userInformed: formData.userInformed,
+      explainabilityLevel: formData.explainabilityLevel,
+      humanOversight: formData.humanOversight,
+      overrideCapability: formData.overrideCapability,
+      autonomyLevel: formData.autonomyLevel,
+      safetyImpact: formData.safetyImpact,
+      decisionConsequences: formData.decisionConsequences,
+    };
+  }
+
+  private adaptFromFrameworkV3(formData: RiskAssessmentFormData): EUAiActInput {
+    // Dériver les signaux EU AI Act des réponses Framework v3.0
+    const transparencyScore = this.getDimensionScoreFromResponses(formData.frameworkResponses, 'transparency_explainability');
+    const oversightScore = this.getDimensionScoreFromResponses(formData.frameworkResponses, 'human_ai_interaction');
+    const robustnessScore = this.getDimensionScoreFromResponses(formData.frameworkResponses, 'technical_robustness_security');
+    const fairnessScore = this.getDimensionScoreFromResponses(formData.frameworkResponses, 'justice_fairness');
+    
+    // Mapper les scores Framework v3.0 vers niveaux catégoriels EU AI Act (≥70 → high, 40–69 → medium, else low)
+    const scoreToLevel = (score: number): 'high' | 'medium' | 'low' => {
+      if (score >= 70) return 'high';
+      if (score >= 40) return 'medium';
+      return 'low';
+    };
+    
+    const scoreToRisk = (score: number): 'high' | 'medium' | 'low' => {
+      if (score < 40) return 'high';  // Inversé pour le risque
+      if (score < 70) return 'medium';
+      return 'low';
+    };
+    
+    return {
+      systemName: formData.systemName,
+      sector: formData.industrySector || 'technology_software',
+      applicationDomain: formData.applicationDomain,
+      userCategories: formData.userCategories,
+      geographicalScope: formData.geographicalScope,
+      
+      // Dériver des Framework v3.0 responses avec mapping intelligent
+      sensitiveData: formData.sensitiveData || (fairnessScore < 50 ? 'yes' : 'limited'),
+      discriminationRisk: scoreToRisk(fairnessScore),
+      userInformed: formData.userInformed || (transparencyScore >= 70 ? 'full' : transparencyScore >= 40 ? 'partial' : 'none'),
+      explainabilityLevel: scoreToLevel(transparencyScore),
+      humanOversight: formData.humanOversight || (oversightScore >= 70 ? 'full' : oversightScore >= 40 ? 'intermittent' : 'minimal'),
+      overrideCapability: formData.overrideCapability || (oversightScore >= 60 ? 'yes' : 'limited'),
+      autonomyLevel: formData.autonomyLevel || scoreToLevel(100 - oversightScore), // Autonomie inversement corrélée à la supervision
+      safetyImpact: formData.safetyImpact || (robustnessScore < 40 ? 'critical' : robustnessScore < 70 ? 'significant' : 'minimal'),
+      decisionConsequences: formData.decisionConsequences || (fairnessScore < 40 ? 'irreversible' : 'reversible'),
+    };
+  }
+
+  private getDimensionScoreFromResponses(responses: Record<string, number>, dimension: string): number {
+    // Calculer le score moyen pour une dimension à partir des réponses
+    const dimensionQuestions = Object.keys(responses).filter(key => key.startsWith(dimension));
+    if (dimensionQuestions.length === 0) return 50; // Score par défaut
+    
+    const totalScore = dimensionQuestions.reduce((sum, key) => sum + (responses[key] || 0), 0);
+    return Math.round((totalScore / dimensionQuestions.length) * 20); // Convert 1-5 scale to 0-100
+  }
+
   // EU AI Act Classification Engine (4 levels as per Regulation (EU) 2024/1689)
-  private classifyEUAIAct(formData: AssessmentFormData): {
+  private classifyEUAIAct(input: EUAiActInput): {
     riskLevel: 'minimal' | 'limited' | 'high' | 'unacceptable';
     reasoning: string;
     applicableArticles: string[];
@@ -63,7 +153,7 @@ class AssessmentService {
     highRiskDomains?: string[];
   } {
     // LEVEL 1: UNACCEPTABLE RISK (Article 5) - Prohibited AI practices
-    const prohibitedCheck = this.checkProhibitedPractices(formData);
+    const prohibitedCheck = this.checkProhibitedPractices(input);
     if (prohibitedCheck.isProhibited) {
       return {
         riskLevel: 'unacceptable',
@@ -74,7 +164,7 @@ class AssessmentService {
     }
 
     // LEVEL 2: HIGH RISK (Annex III) - 8 high-risk domains 
-    const highRiskCheck = this.checkHighRiskDomains(formData);
+    const highRiskCheck = this.checkHighRiskDomains(input);
     if (highRiskCheck.isHighRisk) {
       return {
         riskLevel: 'high',
@@ -86,7 +176,7 @@ class AssessmentService {
     }
 
     // LEVEL 3: LIMITED RISK - Transparency obligations
-    const limitedRiskCheck = this.checkLimitedRisk(formData);
+    const limitedRiskCheck = this.checkLimitedRisk(input);
     if (limitedRiskCheck.isLimitedRisk) {
       return {
         riskLevel: 'limited',
@@ -105,64 +195,64 @@ class AssessmentService {
     };
   }
 
-  private checkProhibitedPractices(formData: AssessmentFormData): {
+  private checkProhibitedPractices(input: EUAiActInput): {
     isProhibited: boolean;
     reasoning: string;
   } {
     const prohibitedScenarios = [];
 
     // Article 5(1)(a) - Subliminal techniques or manipulative techniques
-    if (formData.applicationDomain.toLowerCase().includes('subliminal') ||
-        formData.applicationDomain.toLowerCase().includes('manipulation') ||
-        formData.applicationDomain.toLowerCase().includes('cognitive behavioral') ||
-        (formData.userInformed === 'none' && formData.autonomyLevel === 'high')) {
+    if (input.applicationDomain.toLowerCase().includes('subliminal') ||
+        input.applicationDomain.toLowerCase().includes('manipulation') ||
+        input.applicationDomain.toLowerCase().includes('cognitive behavioral') ||
+        (input.userInformed === 'none' && input.autonomyLevel === 'high')) {
       prohibitedScenarios.push('Techniques subliminales ou manipulatrices (Article 5(1)(a))');
     }
 
     // Article 5(1)(b) - Social scoring by public authorities
-    if (formData.applicationDomain.toLowerCase().includes('social scoring') ||
-        formData.applicationDomain.toLowerCase().includes('social credit') ||
-        formData.applicationDomain.toLowerCase().includes('citizen rating') ||
-        (formData.sector.toLowerCase().includes('government') && 
-         formData.applicationDomain.toLowerCase().includes('scoring'))) {
+    if (input.applicationDomain.toLowerCase().includes('social scoring') ||
+        input.applicationDomain.toLowerCase().includes('social credit') ||
+        input.applicationDomain.toLowerCase().includes('citizen rating') ||
+        (input.sector.toLowerCase().includes('government') && 
+         input.applicationDomain.toLowerCase().includes('scoring'))) {
       prohibitedScenarios.push('Notation sociale par les autorités publiques (Article 5(1)(b))');
     }
 
     // Article 5(1)(c) - Biometric categorisation based on sensitive characteristics
-    if ((formData.applicationDomain.toLowerCase().includes('biometric') &&
-         (formData.applicationDomain.toLowerCase().includes('race') ||
-          formData.applicationDomain.toLowerCase().includes('religion') ||
-          formData.applicationDomain.toLowerCase().includes('sexual') ||
-          formData.applicationDomain.toLowerCase().includes('political'))) ||
-        (formData.sensitiveData === 'yes' && formData.discriminationRisk === 'high')) {
+    if ((input.applicationDomain.toLowerCase().includes('biometric') &&
+         (input.applicationDomain.toLowerCase().includes('race') ||
+          input.applicationDomain.toLowerCase().includes('religion') ||
+          input.applicationDomain.toLowerCase().includes('sexual') ||
+          input.applicationDomain.toLowerCase().includes('political'))) ||
+        (input.sensitiveData === 'yes' && input.discriminationRisk === 'high')) {
       prohibitedScenarios.push('Catégorisation biométrique sur des caractéristiques sensibles (Article 5(1)(c))');
     }
 
     // Article 5(1)(d) - Real-time biometric identification in public spaces (with law enforcement context)
-    if (formData.applicationDomain.toLowerCase().includes('real-time biometric') ||
-        (formData.applicationDomain.toLowerCase().includes('biometric identification') &&
-         formData.geographicalScope !== 'local' &&
-         formData.safetyImpact === 'critical' &&
-         !formData.sector.toLowerCase().includes('law') &&
-         !formData.sector.toLowerCase().includes('security') &&
-         !formData.applicationDomain.toLowerCase().includes('law enforcement'))) {
+    if (input.applicationDomain.toLowerCase().includes('real-time biometric') ||
+        (input.applicationDomain.toLowerCase().includes('biometric identification') &&
+         input.geographicalScope !== 'local' &&
+         input.safetyImpact === 'critical' &&
+         !input.sector.toLowerCase().includes('law') &&
+         !input.sector.toLowerCase().includes('security') &&
+         !input.applicationDomain.toLowerCase().includes('law enforcement'))) {
       prohibitedScenarios.push('Identification biométrique en temps réel dans espaces publics (Article 5(1)(d))');
     }
 
     // Article 5(1)(e) - Exploitation of vulnerabilities due to age, disability, or social/economic situation
-    if ((formData.applicationDomain.toLowerCase().includes('children') ||
-         formData.applicationDomain.toLowerCase().includes('elderly') ||
-         formData.applicationDomain.toLowerCase().includes('disability') ||
-         formData.applicationDomain.toLowerCase().includes('vulnerable')) &&
-        (formData.discriminationRisk === 'high' || formData.autonomyLevel === 'high')) {
+    if ((input.applicationDomain.toLowerCase().includes('children') ||
+         input.applicationDomain.toLowerCase().includes('elderly') ||
+         input.applicationDomain.toLowerCase().includes('disability') ||
+         input.applicationDomain.toLowerCase().includes('vulnerable')) &&
+        (input.discriminationRisk === 'high' || input.autonomyLevel === 'high')) {
       prohibitedScenarios.push('Exploitation de vulnérabilités liées à l\'âge, handicap ou situation sociale (Article 5(1)(e))');
     }
 
     // Article 5(1)(f) - Untargeted scraping of facial images
-    if (formData.applicationDomain.toLowerCase().includes('facial scraping') ||
-        formData.applicationDomain.toLowerCase().includes('facial recognition database') ||
-        (formData.applicationDomain.toLowerCase().includes('facial') && 
-         formData.applicationDomain.toLowerCase().includes('scraping'))) {
+    if (input.applicationDomain.toLowerCase().includes('facial scraping') ||
+        input.applicationDomain.toLowerCase().includes('facial recognition database') ||
+        (input.applicationDomain.toLowerCase().includes('facial') && 
+         input.applicationDomain.toLowerCase().includes('scraping'))) {
       prohibitedScenarios.push('Collecte non ciblée d\'images faciales (Article 5(1)(f))');
     }
 
@@ -176,7 +266,7 @@ class AssessmentService {
     return { isProhibited: false, reasoning: '' };
   }
 
-  private checkHighRiskDomains(formData: AssessmentFormData): {
+  private checkHighRiskDomains(input: EUAiActInput): {
     isHighRisk: boolean;
     reasoning: string;
     domains: string[];
@@ -187,60 +277,60 @@ class AssessmentService {
     const domainChecks = [
       {
         domain: 'Biometric identification and categorisation',
-        check: () => formData.applicationDomain.toLowerCase().includes('biometric') ||
-                     formData.applicationDomain.toLowerCase().includes('identification') ||
-                     formData.applicationDomain.toLowerCase().includes('verification')
+        check: () => input.applicationDomain.toLowerCase().includes('biometric') ||
+                     input.applicationDomain.toLowerCase().includes('identification') ||
+                     input.applicationDomain.toLowerCase().includes('verification')
       },
       {
         domain: 'Management of critical infrastructure',
-        check: () => formData.sector.toLowerCase().includes('energy') ||
-                     formData.sector.toLowerCase().includes('transport') ||
-                     formData.sector.toLowerCase().includes('water') ||
-                     formData.sector.toLowerCase().includes('critical_infrastructure') ||
-                     formData.safetyImpact === 'critical'
+        check: () => input.sector.toLowerCase().includes('energy') ||
+                     input.sector.toLowerCase().includes('transport') ||
+                     input.sector.toLowerCase().includes('water') ||
+                     input.sector.toLowerCase().includes('critical_infrastructure') ||
+                     input.safetyImpact === 'critical'
       },
       {
         domain: 'Education and vocational training',
-        check: () => formData.sector.toLowerCase().includes('education') ||
-                     formData.sector.toLowerCase().includes('training') ||
-                     formData.applicationDomain.toLowerCase().includes('student') ||
-                     formData.applicationDomain.toLowerCase().includes('learning')
+        check: () => input.sector.toLowerCase().includes('education') ||
+                     input.sector.toLowerCase().includes('training') ||
+                     input.applicationDomain.toLowerCase().includes('student') ||
+                     input.applicationDomain.toLowerCase().includes('learning')
       },
       {
         domain: 'Employment, workers management and access to self-employment',
-        check: () => formData.applicationDomain.toLowerCase().includes('recruitment') ||
-                     formData.applicationDomain.toLowerCase().includes('employment') ||
-                     formData.applicationDomain.toLowerCase().includes('hr') ||
-                     formData.applicationDomain.toLowerCase().includes('hiring')
+        check: () => input.applicationDomain.toLowerCase().includes('recruitment') ||
+                     input.applicationDomain.toLowerCase().includes('employment') ||
+                     input.applicationDomain.toLowerCase().includes('hr') ||
+                     input.applicationDomain.toLowerCase().includes('hiring')
       },
       {
         domain: 'Access to and enjoyment of essential services',
-        check: () => formData.sector.toLowerCase().includes('healthcare') ||
-                     formData.sector.toLowerCase().includes('finance') ||
-                     formData.sector.toLowerCase().includes('banking') ||
-                     formData.applicationDomain.toLowerCase().includes('credit') ||
-                     formData.applicationDomain.toLowerCase().includes('insurance')
+        check: () => input.sector.toLowerCase().includes('healthcare') ||
+                     input.sector.toLowerCase().includes('finance') ||
+                     input.sector.toLowerCase().includes('banking') ||
+                     input.applicationDomain.toLowerCase().includes('credit') ||
+                     input.applicationDomain.toLowerCase().includes('insurance')
       },
       {
         domain: 'Law enforcement',
-        check: () => formData.sector.toLowerCase().includes('law enforcement') ||
-                     formData.sector.toLowerCase().includes('police') ||
-                     formData.applicationDomain.toLowerCase().includes('crime') ||
-                     formData.applicationDomain.toLowerCase().includes('forensic')
+        check: () => input.sector.toLowerCase().includes('law enforcement') ||
+                     input.sector.toLowerCase().includes('police') ||
+                     input.applicationDomain.toLowerCase().includes('crime') ||
+                     input.applicationDomain.toLowerCase().includes('forensic')
       },
       {
         domain: 'Migration, asylum and border control',
-        check: () => formData.applicationDomain.toLowerCase().includes('migration') ||
-                     formData.applicationDomain.toLowerCase().includes('asylum') ||
-                     formData.applicationDomain.toLowerCase().includes('border') ||
-                     formData.applicationDomain.toLowerCase().includes('visa')
+        check: () => input.applicationDomain.toLowerCase().includes('migration') ||
+                     input.applicationDomain.toLowerCase().includes('asylum') ||
+                     input.applicationDomain.toLowerCase().includes('border') ||
+                     input.applicationDomain.toLowerCase().includes('visa')
       },
       {
         domain: 'Administration of justice and democratic processes',
-        check: () => formData.sector.toLowerCase().includes('justice') ||
-                     formData.sector.toLowerCase().includes('government') ||
-                     formData.applicationDomain.toLowerCase().includes('court') ||
-                     formData.applicationDomain.toLowerCase().includes('legal')
+        check: () => input.sector.toLowerCase().includes('justice') ||
+                     input.sector.toLowerCase().includes('government') ||
+                     input.applicationDomain.toLowerCase().includes('court') ||
+                     input.applicationDomain.toLowerCase().includes('legal')
       }
     ];
 
@@ -261,34 +351,34 @@ class AssessmentService {
     return { isHighRisk: false, reasoning: '', domains: [] };
   }
 
-  private checkLimitedRisk(formData: AssessmentFormData): {
+  private checkLimitedRisk(input: EUAiActInput): {
     isLimitedRisk: boolean;
     reasoning: string;
   } {
     const transparencyTriggers = [];
 
     // Article 50 - Transparency obligations
-    if (formData.applicationDomain.toLowerCase().includes('chatbot') ||
-        formData.applicationDomain.toLowerCase().includes('conversational') ||
-        formData.userInformed === 'none' ||
-        formData.userInformed === 'partial') {
+    if (input.applicationDomain.toLowerCase().includes('chatbot') ||
+        input.applicationDomain.toLowerCase().includes('conversational') ||
+        input.userInformed === 'none' ||
+        input.userInformed === 'partial') {
       transparencyTriggers.push('Interaction avec des personnes physiques');
     }
 
-    if (formData.applicationDomain.toLowerCase().includes('emotion') ||
-        formData.applicationDomain.toLowerCase().includes('deepfake') ||
-        formData.applicationDomain.toLowerCase().includes('synthetic')) {
+    if (input.applicationDomain.toLowerCase().includes('emotion') ||
+        input.applicationDomain.toLowerCase().includes('deepfake') ||
+        input.applicationDomain.toLowerCase().includes('synthetic')) {
       transparencyTriggers.push('Reconnaissance d\'émotions ou catégorisation biométrique');
     }
 
-    if (formData.applicationDomain.toLowerCase().includes('content generation') ||
-        formData.applicationDomain.toLowerCase().includes('text generation') ||
-        formData.applicationDomain.toLowerCase().includes('image generation')) {
+    if (input.applicationDomain.toLowerCase().includes('content generation') ||
+        input.applicationDomain.toLowerCase().includes('text generation') ||
+        input.applicationDomain.toLowerCase().includes('image generation')) {
       transparencyTriggers.push('Génération de contenu artificiel');
     }
 
     if (transparencyTriggers.length > 0 || 
-        (formData.explainabilityLevel === 'low' && formData.autonomyLevel === 'high')) {
+        (input.explainabilityLevel === 'low' && input.autonomyLevel === 'high')) {
       return {
         isLimitedRisk: true,
         reasoning: `RISQUE LIMITÉ : Ce système IA nécessite des obligations de transparence selon l'Article 50 du fait de : ${transparencyTriggers.length > 0 ? transparencyTriggers.join(', ') : 'son niveau d\'autonomie élevé avec faible explicabilité'}. Les utilisateurs doivent être clairement informés qu'ils interagissent avec un système IA.`
@@ -323,7 +413,7 @@ class AssessmentService {
     userId: string
   ): Promise<LegacyRiskAssessmentResult> {
     // ✅ NEW: Explicit EU AI Act Classification (Tier 1)
-    const euAiActClassification = this.classifyEUAIAct(formData);
+    const euAiActClassification = this.classifyEUAIAct(this.adaptFromLegacyFormat(formData));
     
     // ✅ NEW: Calculate Framework risk score (Tier 2) 
     const frameworkRiskScore = this.calculateRiskScore(formData);
@@ -686,7 +776,7 @@ class AssessmentService {
 
   private getObligations(
     riskLevel: string,
-    formData: AssessmentFormData
+    formData: RiskAssessmentFormData
   ): string[] {
     const baseObligations = [
       "Respecter les principes d'IA éthique et responsable",
@@ -735,7 +825,7 @@ class AssessmentService {
     userId: string
   ): Promise<{ aiSystemId: string; assessmentId: string }> {
     // ✅ NEW: Get explicit EU AI Act classification for proper storage
-    const euAiActClassification = this.classifyEUAIAct(formData);
+    const euAiActClassification = this.classifyEUAIAct(this.adaptFromLegacyFormat(formData));
     
     // Create or update AI system
     const aiSystemData: InsertAiSystem = {
@@ -1181,8 +1271,7 @@ class AssessmentService {
   // Enhanced assessment combining EU AI Act + Framework v3.0
   async assessCombined(formData: RiskAssessmentFormData): Promise<RiskAssessmentResult> {
     // 1. EU AI Act Classification (Tier 1)
-    const legacyFormData = this.convertToLegacyFormat(formData);
-    const euAiActClassification = this.classifyEUAIAct(legacyFormData);
+    const euAiActClassification = this.classifyEUAIAct(this.adaptFromFrameworkV3(formData));
     
     // 2. Framework v3.0 Assessment (Tier 2)
     const frameworkData: FrameworkAssessmentData = {
@@ -1216,7 +1305,7 @@ class AssessmentService {
       riskLevel,
       riskScore,
       reasoning,
-      applicableObligations: this.getObligations(euAiActClassification.riskLevel, legacyFormData),
+      applicableObligations: this.getObligations(euAiActClassification.riskLevel, formData),
       complianceGaps: this.identifyComplianceGaps(euAiActClassification, frameworkResult),
       complianceScore: this.calculateComplianceScore(euAiActClassification, frameworkResult),
       recommendations: [...frameworkResult.recommendations],
