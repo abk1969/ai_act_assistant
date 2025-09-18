@@ -458,7 +458,7 @@ export const registerUserSchema = z.object({
   password: z.string().min(8, "Password must be at least 8 characters"),
   firstName: z.string().optional(),
   lastName: z.string().optional(),
-  profileImageUrl: z.string().url().optional().nullable(),
+  profileImageUrl: z.string().url().optional().or(z.literal("")).optional(),
 });
 
 export const loginUserSchema = z.object({
