@@ -5,7 +5,8 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 import { useToast } from "@/hooks/use-toast";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
-import { AlertTriangle, CheckCircle, Clock } from "lucide-react";
+import { useAuth } from "@/hooks/useAuth";
+import { AlertTriangle, CheckCircle, Clock, User } from "lucide-react";
 import RiskForm from "@/components/assessment/risk-form";
 
 interface AssessmentResult {
@@ -28,6 +29,7 @@ export default function Assessment() {
   const [isFormCompleted, setIsFormCompleted] = useState(false);
   const { toast } = useToast();
   const queryClient = useQueryClient();
+  const { user } = useAuth();
 
   const assessmentMutation = useMutation({
     mutationFn: async (formData: any) => {
@@ -97,12 +99,27 @@ export default function Assessment() {
   return (
     <div className="p-8" data-testid="page-assessment">
       <div className="mb-8">
-        <h2 className="text-3xl font-bold text-foreground mb-2">
-          Évaluation des risques IA
-        </h2>
-        <p className="text-muted-foreground">
-          Basé sur le Technical Framework v3.0 - Positive AI
-        </p>
+        <div className="flex items-center justify-between mb-4">
+          <div>
+            <h2 className="text-3xl font-bold text-foreground mb-2">
+              Évaluation des risques IA
+            </h2>
+            <p className="text-muted-foreground">
+              Basé sur le Technical Framework v3.0 - Positive AI
+            </p>
+          </div>
+          {user && (
+            <div className="flex items-center gap-2 bg-card border border-border rounded-lg px-4 py-2">
+              <User className="h-4 w-4 text-muted-foreground" />
+              <span className="text-sm text-foreground" data-testid="text-current-user">
+                {user.firstName} {user.lastName}
+              </span>
+              <span className="text-xs text-muted-foreground">
+                ({user.email})
+              </span>
+            </div>
+          )}
+        </div>
       </div>
 
       {!isFormCompleted ? (
