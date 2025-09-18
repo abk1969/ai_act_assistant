@@ -25,10 +25,11 @@ export const sessions = pgTable(
   (table) => [index("IDX_session_expire").on(table.expire)],
 );
 
-// User storage table (mandatory for Replit Auth)
+// User storage table (autonomous authentication)
 export const users = pgTable("users", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
-  email: varchar("email").unique(),
+  email: varchar("email").notNull().unique(),
+  passwordHash: text("password_hash").notNull(),
   firstName: varchar("first_name"),
   lastName: varchar("last_name"),
   profileImageUrl: varchar("profile_image_url"),
@@ -451,6 +452,26 @@ export const insertUserSchema = createInsertSchema(users).omit({
   updatedAt: true,
 });
 
+// Safe schemas for user registration/login (excludes passwordHash from responses)
+export const registerUserSchema = insertUserSchema.pick({
+  email: true,
+  passwordHash: true,
+  firstName: true,
+  lastName: true,
+  profileImageUrl: true,
+});
+
+export const loginUserSchema = z.object({
+  email: z.string().email(),
+  password: z.string().min(8),
+});
+
+export const safeUserSchema = createInsertSchema(users).omit({
+  passwordHash: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
 export const insertAiSystemSchema = createInsertSchema(aiSystems).omit({
   id: true,
   createdAt: true,
@@ -509,6 +530,9 @@ export const insertUseCaseRiskMappingSchema = createInsertSchema(useCaseRiskMapp
 // Types
 export type UpsertUser = typeof users.$inferInsert;
 export type User = typeof users.$inferSelect;
+export type SafeUser = Omit<User, 'passwordHash'>; // Never expose password hash
+export type RegisterUser = z.infer<typeof registerUserSchema>;
+export type LoginUser = z.infer<typeof loginUserSchema>;
 export type AiSystem = typeof aiSystems.$inferSelect;
 export type InsertAiSystem = z.infer<typeof insertAiSystemSchema>;
 export type RiskAssessment = typeof riskAssessments.$inferSelect;
