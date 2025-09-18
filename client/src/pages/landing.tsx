@@ -2,6 +2,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Shield, Bot, FileText, Eye, AlertTriangle, Scale } from "lucide-react";
+import { AuthModal } from "@/components/auth";
 
 export default function Landing() {
   return (
@@ -20,12 +21,11 @@ export default function Landing() {
               </div>
             </div>
             
-            <Button 
-              onClick={() => window.location.href = '/api/login'}
-              data-testid="button-login"
-            >
-              Se connecter
-            </Button>
+            <AuthModal>
+              <Button data-testid="button-login">
+                Se connecter
+              </Button>
+            </AuthModal>
           </div>
         </div>
       </header>
@@ -50,14 +50,15 @@ export default function Landing() {
             </AlertDescription>
           </Alert>
 
-          <Button 
-            size="lg" 
-            onClick={() => window.location.href = '/api/login'}
-            className="mb-16"
-            data-testid="button-get-started"
-          >
-            Commencer l'évaluation
-          </Button>
+          <AuthModal>
+            <Button 
+              size="lg"
+              className="mb-16"
+              data-testid="button-get-started"
+            >
+              Commencer l'évaluation
+            </Button>
+          </AuthModal>
         </div>
 
         {/* Features Grid */}

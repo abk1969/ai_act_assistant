@@ -1,7 +1,14 @@
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { useAuth } from "@/hooks/useAuth";
-import { Menu, Search, Bell, ChevronDown, Bot } from "lucide-react";
+import { useAuth, useLogout } from "@/hooks/useAuth";
+import { 
+  DropdownMenu, 
+  DropdownMenuContent, 
+  DropdownMenuItem, 
+  DropdownMenuSeparator, 
+  DropdownMenuTrigger 
+} from "@/components/ui/dropdown-menu";
+import { Menu, Search, Bell, ChevronDown, Bot, User, LogOut } from "lucide-react";
 
 interface NavbarProps {
   onToggleSidebar: () => void;
@@ -9,6 +16,7 @@ interface NavbarProps {
 
 export default function Navbar({ onToggleSidebar }: NavbarProps) {
   const { user } = useAuth();
+  const logout = useLogout();
 
   return (
     <nav className="fixed top-0 left-0 right-0 bg-card border-b border-border z-40">
@@ -53,25 +61,44 @@ export default function Navbar({ onToggleSidebar }: NavbarProps) {
           </Button>
           
           {/* User Profile */}
-          <div className="flex items-center gap-2 p-2 hover:bg-muted rounded-md cursor-pointer">
-            <div className="w-8 h-8 bg-accent rounded-full flex items-center justify-center">
-              {user?.profileImageUrl ? (
-                <img 
-                  src={user.profileImageUrl} 
-                  alt="Profile" 
-                  className="w-8 h-8 rounded-full object-cover"
-                />
-              ) : (
-                <span className="text-accent-foreground text-sm font-medium">
-                  {user?.firstName?.[0] || user?.email?.[0] || 'U'}
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <div className="flex items-center gap-2 p-2 hover:bg-muted rounded-md cursor-pointer" data-testid="button-user-menu">
+                <div className="w-8 h-8 bg-accent rounded-full flex items-center justify-center">
+                  {user?.profileImageUrl ? (
+                    <img 
+                      src={user.profileImageUrl} 
+                      alt="Profile" 
+                      className="w-8 h-8 rounded-full object-cover"
+                    />
+                  ) : (
+                    <span className="text-accent-foreground text-sm font-medium">
+                      {user?.firstName?.[0] || user?.email?.[0] || 'U'}
+                    </span>
+                  )}
+                </div>
+                <span className="text-sm font-medium text-foreground" data-testid="text-username">
+                  {user?.firstName || user?.email || 'Utilisateur'}
                 </span>
-              )}
-            </div>
-            <span className="text-sm font-medium text-foreground" data-testid="text-username">
-              {user?.firstName || user?.email || 'Utilisateur'}
-            </span>
-            <ChevronDown className="h-3 w-3 text-muted-foreground" />
-          </div>
+                <ChevronDown className="h-3 w-3 text-muted-foreground" />
+              </div>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-56">
+              <DropdownMenuItem data-testid="menu-profile">
+                <User className="mr-2 h-4 w-4" />
+                <span>Profil</span>
+              </DropdownMenuItem>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem 
+                onClick={() => logout.mutate()}
+                disabled={logout.isPending}
+                data-testid="menu-logout"
+              >
+                <LogOut className="mr-2 h-4 w-4" />
+                <span>{logout.isPending ? 'Déconnexion...' : 'Se déconnecter'}</span>
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
         </div>
       </div>
     </nav>
