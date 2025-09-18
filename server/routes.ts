@@ -1,14 +1,15 @@
 import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
-import { setupAuth, isAuthenticated } from "./auth";
+import { setupAuth, isAuthenticated, AuthService } from "./auth";
 import { assessmentService } from "./services/assessmentService";
 import { complianceService } from "./services/complianceService";
 import { regulatoryService } from "./services/regulatoryService";
 import { llmService } from "./services/llmService";
 import { maturityService } from "./services/maturityService";
-import { insertAiSystemSchema, insertRiskAssessmentSchema, insertLlmSettingsSchema, insertComplianceCertificateSchema } from "@shared/schema";
+import { insertAiSystemSchema, insertRiskAssessmentSchema, insertLlmSettingsSchema, insertComplianceCertificateSchema, registerUserSchema, loginUserSchema } from "@shared/schema";
 import { z } from "zod";
+import passport from "passport";
 
 export async function registerRoutes(app: Express): Promise<Server> {
   // Auth middleware
@@ -23,17 +24,98 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const userId = req.user.id;
       const user = await storage.getUser(userId);
       
-      // Initialize LLM configurations from environment variables if not already done
-      const existingSettings = await storage.getLlmSettings(userId);
-      if (existingSettings.length === 0) {
-        await llmService.initializeFromEnvironment(userId);
+      if (!user) {
+        return res.status(404).json({ message: "User not found" });
       }
       
-      res.json(user);
+      // Initialize LLM configurations from environment variables if not already done
+      try {
+        const existingSettings = await storage.getLlmSettings(userId);
+        if (existingSettings.length === 0) {
+          await llmService.initializeFromEnvironment(userId);
+        }
+      } catch (error) {
+        console.error("Error initializing LLM configurations:", error);
+        // Don't fail the request if LLM initialization fails
+      }
+      
+      // Return safe user without password hash
+      const { passwordHash, ...safeUser } = user;
+      res.json(safeUser);
     } catch (error) {
       console.error("Error fetching user:", error);
       res.status(500).json({ message: "Failed to fetch user" });
     }
+  });
+
+  // Registration route
+  app.post('/api/auth/register', async (req, res) => {
+    try {
+      const userData = registerUserSchema.parse(req.body);
+      const newUser = await AuthService.registerUser(userData);
+      res.status(201).json({ user: newUser, message: "User registered successfully" });
+    } catch (error: any) {
+      console.error("Error registering user:", error);
+      if (error.message === "Email already exists") {
+        return res.status(409).json({ message: "Email already exists" });
+      }
+      res.status(400).json({ message: "Registration failed" });
+    }
+  });
+
+  // Login route
+  app.post('/api/auth/login', (req, res, next) => {
+    try {
+      // Validate request body
+      loginUserSchema.parse(req.body);
+    } catch (error) {
+      return res.status(400).json({ message: "Invalid request format" });
+    }
+
+    passport.authenticate('local', (err: any, user: any, info: any) => {
+      if (err) {
+        console.error("Login error:", err);
+        return res.status(500).json({ message: "Internal server error" });
+      }
+      if (!user) {
+        return res.status(401).json({ message: "Invalid email or password" });
+      }
+      
+      // Regenerate session to prevent session fixation attacks
+      req.session.regenerate((regenerateErr) => {
+        if (regenerateErr) {
+          console.error("Session regeneration error:", regenerateErr);
+          return res.status(500).json({ message: "Session error" });
+        }
+        
+        req.logIn(user, (err) => {
+          if (err) {
+            console.error("Session error:", err);
+            return res.status(500).json({ message: "Session error" });
+          }
+          res.json({ user, message: "Login successful" });
+        });
+      });
+    })(req, res, next);
+  });
+
+  // Logout route
+  app.post('/api/auth/logout', (req, res) => {
+    req.logout((err) => {
+      if (err) {
+        console.error("Logout error:", err);
+        return res.status(500).json({ message: "Logout failed" });
+      }
+      
+      // Optionally regenerate session after logout for extra security
+      req.session.regenerate((regenerateErr) => {
+        if (regenerateErr) {
+          console.error("Session regeneration after logout error:", regenerateErr);
+          // Don't fail the logout if session regeneration fails
+        }
+        res.json({ message: "Logout successful" });
+      });
+    });
   });
 
   // AI Systems routes

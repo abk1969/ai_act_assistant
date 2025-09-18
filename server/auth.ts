@@ -60,11 +60,12 @@ export class AuthService {
   static async registerUser(userData: RegisterUser): Promise<SafeUser> {
     // Normalize email and hash the password before storing
     const normalizedEmail = this.normalizeEmail(userData.email);
-    const passwordHash = await PasswordUtils.hash(userData.passwordHash);
+    const passwordHash = await PasswordUtils.hash(userData.password);
     
     try {
+      const { password, ...userDataWithoutPassword } = userData;
       const newUser = await storage.upsertUser({
-        ...userData,
+        ...userDataWithoutPassword,
         email: normalizedEmail,
         passwordHash,
       });
