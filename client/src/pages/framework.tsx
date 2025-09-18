@@ -28,7 +28,6 @@ import {
   User
 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
-import { useAuth } from '@/hooks/useAuth';
 import { apiRequest } from '@/lib/queryClient';
 
 // Industry sectors matching shared/schema.ts industrySectorEnum exactly
@@ -277,7 +276,6 @@ export default function FrameworkAssessment() {
   const [currentStep, setCurrentStep] = useState<'form' | 'results'>('form');
   const { toast } = useToast();
   const queryClient = useQueryClient();
-  const { user } = useAuth();
 
   const form = useForm<FrameworkFormData>({
     resolver: zodResolver(frameworkSchema),
@@ -530,22 +528,9 @@ export default function FrameworkAssessment() {
 
   return (
     <div className="container mx-auto py-8 space-y-6">
-      <div className="flex items-center justify-between mb-6">
-        <div className="text-center flex-1">
-          <h1 className="text-3xl font-bold mb-2">Évaluation Framework Positive AI v3.0</h1>
-          <p className="text-gray-600">Évaluation complète sur les 7 dimensions éthiques de l'IA</p>
-        </div>
-        {user && (
-          <div className="flex items-center gap-2 bg-card border border-border rounded-lg px-4 py-2">
-            <User className="h-4 w-4 text-muted-foreground" />
-            <span className="text-sm text-foreground" data-testid="text-current-user-framework">
-              {user.firstName} {user.lastName}
-            </span>
-            <span className="text-xs text-muted-foreground">
-              ({user.email})
-            </span>
-          </div>
-        )}
+      <div className="text-center mb-6">
+        <h1 className="text-3xl font-bold mb-2">Évaluation Framework Positive AI v3.0</h1>
+        <p className="text-gray-600">Évaluation complète sur les 7 dimensions éthiques de l'IA</p>
       </div>
 
       <Form {...form}>

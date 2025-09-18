@@ -19,9 +19,11 @@ import {
   AlertTriangle,
   Clock,
   Lightbulb,
-  Settings
+  Settings,
+  User
 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
+import { useAuth } from '@/hooks/useAuth';
 
 // Constants for Framework Positive AI v3.0
 const INDUSTRY_SECTORS = [
@@ -132,6 +134,7 @@ export default function MaturityPage() {
   const [assessmentResult, setAssessmentResult] = useState<MaturityAssessmentResult | null>(null);
   const { toast } = useToast();
   const queryClient = useQueryClient();
+  const { user } = useAuth();
 
   // Fetch maturity framework
   const { data: framework, isLoading: frameworkLoading } = useQuery<MaturityDomain[]>({
@@ -328,15 +331,30 @@ export default function MaturityPage() {
   return (
     <div className="container mx-auto py-8 space-y-8">
       {/* Header */}
-      <div className="text-center space-y-4">
-        <div className="flex items-center justify-center gap-3">
-          <TrendingUp className="h-8 w-8 text-primary" />
-          <h1 className="text-3xl font-bold text-foreground">Évaluation de Maturité Organisationnelle</h1>
+      <div className="mb-8">
+        <div className="flex items-center justify-between mb-4">
+          <div>
+            <div className="flex items-center gap-3 mb-2">
+              <TrendingUp className="h-8 w-8 text-primary" />
+              <h1 className="text-3xl font-bold text-foreground">Évaluation de Maturité Organisationnelle</h1>
+            </div>
+            <p className="text-lg text-muted-foreground">
+              Évaluez la maturité de votre organisation en matière d'Intelligence Artificielle 
+              avec le framework Positive AI. Identifiez vos forces et axes d'amélioration.
+            </p>
+          </div>
+          {user && (
+            <div className="flex items-center gap-2 bg-card border border-border rounded-lg px-4 py-2">
+              <User className="h-4 w-4 text-muted-foreground" />
+              <span className="text-sm text-foreground" data-testid="text-current-user-maturity">
+                {user.firstName} {user.lastName}
+              </span>
+              <span className="text-xs text-muted-foreground">
+                ({user.email})
+              </span>
+            </div>
+          )}
         </div>
-        <p className="text-lg text-muted-foreground max-w-3xl mx-auto">
-          Évaluez la maturité de votre organisation en matière d'Intelligence Artificielle 
-          avec le framework Positive AI. Identifiez vos forces et axes d'amélioration.
-        </p>
       </div>
 
       {currentStep === 'form' ? (
