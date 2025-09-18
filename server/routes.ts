@@ -1,7 +1,7 @@
 import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
-import { setupAuth, isAuthenticated } from "./replitAuth";
+import { setupAuth, isAuthenticated } from "./auth";
 import { assessmentService } from "./services/assessmentService";
 import { complianceService } from "./services/complianceService";
 import { regulatoryService } from "./services/regulatoryService";
@@ -20,7 +20,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Auth routes
   app.get('/api/auth/user', isAuthenticated, async (req: any, res) => {
     try {
-      const userId = req.user.claims.sub;
+      const userId = req.user.id;
       const user = await storage.getUser(userId);
       
       // Initialize LLM configurations from environment variables if not already done
@@ -39,7 +39,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // AI Systems routes
   app.get('/api/ai-systems', isAuthenticated, async (req: any, res) => {
     try {
-      const userId = req.user.claims.sub;
+      const userId = req.user.id;
       const systems = await storage.getAiSystemsByUser(userId);
       res.json(systems);
     } catch (error) {
@@ -58,7 +58,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       // Check ownership
-      if (system.userId !== req.user.claims.sub) {
+      if (system.userId !== req.user.id) {
         return res.status(403).json({ message: "Access denied" });
       }
 
@@ -71,7 +71,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.post('/api/ai-systems', isAuthenticated, async (req: any, res) => {
     try {
-      const userId = req.user.claims.sub;
+      const userId = req.user.id;
       const systemData = insertAiSystemSchema.parse({
         ...req.body,
         userId
@@ -97,7 +97,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Risk Assessment routes
   app.post('/api/assessments', isAuthenticated, async (req: any, res) => {
     try {
-      const userId = req.user.claims.sub;
+      const userId = req.user.id;
       const formData = req.body;
       
       // Perform risk assessment
@@ -162,7 +162,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.post('/api/maturity/assessments', isAuthenticated, async (req: any, res) => {
     try {
-      const userId = req.user.claims.sub;
+      const userId = req.user.id;
       const formData = req.body;
       
       // Perform maturity assessment
@@ -183,7 +183,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.get('/api/maturity/assessments', isAuthenticated, async (req: any, res) => {
     try {
-      const userId = req.user.claims.sub;
+      const userId = req.user.id;
       const assessments = await storage.getMaturityAssessmentsByUser(userId);
       res.json(assessments);
     } catch (error) {
@@ -232,7 +232,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Compliance routes
   app.get('/api/compliance/overview', isAuthenticated, async (req: any, res) => {
     try {
-      const userId = req.user.claims.sub;
+      const userId = req.user.id;
       const overview = await complianceService.getComplianceOverview(userId);
       res.json(overview);
     } catch (error) {
@@ -243,7 +243,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.get('/api/compliance/matrix', isAuthenticated, async (req: any, res) => {
     try {
-      const userId = req.user.claims.sub;
+      const userId = req.user.id;
       const matrix = await complianceService.getComplianceMatrix(userId);
       res.json(matrix);
     } catch (error) {
@@ -254,7 +254,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.post('/api/compliance/report/:systemId', isAuthenticated, async (req: any, res) => {
     try {
-      const userId = req.user.claims.sub;
+      const userId = req.user.id;
       const { systemId } = req.params;
       
       const report = await complianceService.generateComplianceReport(systemId, userId);
@@ -268,7 +268,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Document generation routes
   app.get('/api/documents', isAuthenticated, async (req: any, res) => {
     try {
-      const userId = req.user.claims.sub;
+      const userId = req.user.id;
       const { systemId } = req.query;
       
       let documents;
@@ -292,7 +292,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.post('/api/documents/generate', isAuthenticated, async (req: any, res) => {
     try {
-      const userId = req.user.claims.sub;
+      const userId = req.user.id;
       const { systemId, documentType, title } = req.body;
       
       // Get AI system details and risk assessments for context
@@ -523,7 +523,7 @@ Le registre doit contenir:
   // LLM Settings routes
   app.get('/api/llm/settings', isAuthenticated, async (req: any, res) => {
     try {
-      const userId = req.user.claims.sub;
+      const userId = req.user.id;
       const settings = await storage.getLlmSettings(userId);
       
       // Remove API keys from response for security
@@ -541,7 +541,7 @@ Le registre doit contenir:
 
   app.post('/api/llm/settings', isAuthenticated, async (req: any, res) => {
     try {
-      const userId = req.user.claims.sub;
+      const userId = req.user.id;
       const settingsData = insertLlmSettingsSchema.parse({
         ...req.body,
         userId
@@ -573,7 +573,7 @@ Le registre doit contenir:
 
   app.post('/api/llm/test-connection', isAuthenticated, async (req: any, res) => {
     try {
-      const userId = req.user.claims.sub;
+      const userId = req.user.id;
       const { provider } = req.body;
       
       const isConnected = await llmService.testConnection(userId, provider);
@@ -587,7 +587,7 @@ Le registre doit contenir:
   // Dashboard metrics
   app.get('/api/dashboard/metrics', isAuthenticated, async (req: any, res) => {
     try {
-      const userId = req.user.claims.sub;
+      const userId = req.user.id;
       
       const [systems, complianceOverview, criticalAlerts] = await Promise.all([
         storage.getAiSystemsByUser(userId),
@@ -620,7 +620,7 @@ Le registre doit contenir:
   // Compliance Certificates Routes
   app.get('/api/certificates', isAuthenticated, async (req: any, res) => {
     try {
-      const userId = req.user.claims.sub;
+      const userId = req.user.id;
       const { systemId, type, status } = req.query;
       
       let certificates;
@@ -651,7 +651,7 @@ Le registre doit contenir:
 
   app.post('/api/certificates/generate', isAuthenticated, async (req: any, res) => {
     try {
-      const userId = req.user.claims.sub;
+      const userId = req.user.id;
       
       // Validate request body with Zod
       const generateCertificateSchema = z.object({
@@ -807,7 +807,7 @@ Le registre doit contenir:
 
   app.get('/api/certificates/:id', isAuthenticated, async (req: any, res) => {
     try {
-      const userId = req.user.claims.sub;
+      const userId = req.user.id;
       const { id } = req.params;
       
       const certificate = await storage.getCertificate(id);
@@ -830,7 +830,7 @@ Le registre doit contenir:
 
   app.patch('/api/certificates/:id/status', isAuthenticated, async (req: any, res) => {
     try {
-      const userId = req.user.claims.sub;
+      const userId = req.user.id;
       const { id } = req.params;
       const { status } = req.body;
       
