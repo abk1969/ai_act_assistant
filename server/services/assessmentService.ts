@@ -1074,8 +1074,9 @@ class AssessmentService {
         const timeline = priority === 'critical' ? 'Immédiat' : '1-3 mois';
         
         // Find worst performing strategies
-        for (const [strategyId, strategyResult] of Object.entries(result.strategyResults)) {
-          if (strategyResult.score < 60) {
+        for (const [strategyId, strategyResult] of Object.entries(result.strategyResults || {})) {
+          const strategyData = strategyResult as any;
+          if (strategyData && strategyData.score < 60) {
             actions.push({
               dimension: dimId,
               strategy: strategyId,
@@ -1190,7 +1191,7 @@ class AssessmentService {
       industrySector: formData.industrySector,
       primaryUseCase: formData.primaryUseCase,
       systemDescription: formData.systemDescription,
-      responses: formData.frameworkResponses
+      responses: formData.frameworkResponses || {}
     };
     
     const frameworkResult = await this.assessFrameworkV3(frameworkData);
@@ -1210,7 +1211,7 @@ class AssessmentService {
         isHighRiskDomain: euAiActClassification.isHighRiskDomain,
         highRiskDomains: euAiActClassification.highRiskDomains
       },
-      dimensionScores: frameworkResult.dimensionResults,
+      dimensionScores: this.transformDimensionResults(frameworkResult.dimensionResults),
       overallFrameworkScore: frameworkResult.overallScore,
       riskLevel,
       riskScore,
@@ -1256,6 +1257,29 @@ class AssessmentService {
   private euLevelToScore(level: string): number {
     const map = { 'minimal': 20, 'limited': 40, 'high': 70, 'unacceptable': 100 };
     return map[level as keyof typeof map] || 20;
+  }
+
+  private transformDimensionResults(dimensionResults: Record<string, any>): Record<string, {
+    score: number;
+    riskLevel: string;
+    recommendations: string[];
+  }> {
+    const transformed: Record<string, {
+      score: number;
+      riskLevel: string;
+      recommendations: string[];
+    }> = {};
+    
+    for (const [key, value] of Object.entries(dimensionResults)) {
+      const result = value as any;
+      transformed[key] = {
+        score: result?.score || 0,
+        riskLevel: result?.level || 'minimal',
+        recommendations: result?.improvements || []
+      };
+    }
+    
+    return transformed;
   }
 
   private determineFinalRiskLevel(euLevel: string, frameworkRisk: string): 'minimal' | 'limited' | 'high' | 'unacceptable' {
@@ -1418,6 +1442,268 @@ class AssessmentService {
       aiSystemId: aiSystem.id,
       assessmentId: assessment.id,
     };
+  }
+
+  // Enhanced assessment method for enriched UI questionnaires (Framework v3.0)
+  async assessEnrichedRiskV3(formData: {
+    systemName: string;
+    industrySector?: string;
+    primaryUseCase?: string;
+    responses: Record<string, number>;
+  }): Promise<{
+    riskLevel: 'minimal' | 'limited' | 'high' | 'unacceptable';
+    riskScore: number;
+    reasoning: string;
+    obligations: string[];
+    recommendations: string[];
+    dimensionScores: Record<string, {
+      score: number;
+      riskLevel: string;
+      recommendations: string[];
+    }>;
+    timeline: {
+      immediate: string[];
+      short_term: string[];
+      long_term: string[];
+    };
+  }> {
+    // Calculate dimension scores from responses
+    const dimensionScores = this.calculateEnrichedDimensionScores(formData.responses);
+    
+    // Calculate overall risk score
+    const overallScore = this.calculateEnrichedRiskScore(dimensionScores);
+    
+    // Determine risk level
+    const riskLevel = this.determineEnrichedRiskLevel(overallScore);
+    
+    // Generate reasoning
+    const reasoning = await this.generateEnrichedReasoning(dimensionScores, riskLevel, formData);
+    
+    // Get obligations based on risk level
+    const obligations = this.getObligationsForRiskLevel(riskLevel);
+    
+    // Generate recommendations based on dimension scores
+    const recommendations = this.generateDimensionRecommendationsV3(dimensionScores);
+    
+    // Generate action timeline
+    const timeline = this.generateActionTimelineV3(dimensionScores, riskLevel);
+    
+    return {
+      riskLevel,
+      riskScore: overallScore,
+      reasoning,
+      obligations,
+      recommendations,
+      dimensionScores,
+      timeline
+    };
+  }
+
+  private calculateEnrichedDimensionScores(responses: Record<string, number>): Record<string, {
+    score: number;
+    riskLevel: string;
+    recommendations: string[];
+  }> {
+    const dimensions = [
+      'justice_fairness',
+      'transparency_explainability', 
+      'human_ai_interaction',
+      'social_environmental_impact',
+      'responsibility',
+      'data_privacy',
+      'technical_robustness_security'
+    ];
+    
+    const dimensionScores: Record<string, {
+      score: number;
+      riskLevel: string;
+      recommendations: string[];
+    }> = {};
+    
+    for (const dimension of dimensions) {
+      // Find responses for this dimension
+      const dimensionResponses = Object.entries(responses)
+        .filter(([key]) => key.includes(dimension.split('_')[0]))
+        .map(([, value]) => value);
+      
+      if (dimensionResponses.length > 0) {
+        // Calculate average score for this dimension (convert risk values to performance scores)
+        const avgRiskValue = dimensionResponses.reduce((sum, val) => sum + val, 0) / dimensionResponses.length;
+        const performanceScore = Math.max(0, 100 - avgRiskValue); // Invert risk to performance
+        
+        const riskLevel = this.scoreToRiskLevelV3(avgRiskValue);
+        const recommendations = this.getDimensionRecommendationsForScore(dimension, performanceScore);
+        
+        dimensionScores[dimension] = {
+          score: Math.round(performanceScore),
+          riskLevel,
+          recommendations
+        };
+      }
+    }
+    
+    return dimensionScores;
+  }
+  
+  private calculateEnrichedRiskScore(dimensionScores: Record<string, { score: number }>): number {
+    const scores = Object.values(dimensionScores).map(d => 100 - d.score); // Convert back to risk
+    if (scores.length === 0) return 0;
+    
+    return Math.round(scores.reduce((sum, score) => sum + score, 0) / scores.length);
+  }
+  
+  private determineEnrichedRiskLevel(riskScore: number): 'minimal' | 'limited' | 'high' | 'unacceptable' {
+    if (riskScore >= 80) return 'unacceptable';
+    if (riskScore >= 60) return 'high';
+    if (riskScore >= 30) return 'limited';
+    return 'minimal';
+  }
+  
+  private scoreToRiskLevelV3(riskValue: number): string {
+    if (riskValue >= 80) return 'unacceptable';
+    if (riskValue >= 60) return 'high';
+    if (riskValue >= 30) return 'limited';
+    return 'minimal';
+  }
+  
+  private async generateEnrichedReasoning(
+    dimensionScores: Record<string, { score: number; riskLevel: string }>, 
+    riskLevel: string, 
+    formData: any
+  ): Promise<string> {
+    const highRiskDimensions = Object.entries(dimensionScores)
+      .filter(([, score]) => score.riskLevel === 'high' || score.riskLevel === 'unacceptable')
+      .map(([dim]) => this.getDimensionDisplayName(dim));
+    
+    let reasoning = `Évaluation basée sur le Technical Framework v3.0 - Positive AI. `;
+    
+    if (riskLevel === 'unacceptable') {
+      reasoning += `Le système présente un risque inacceptable principalement dû à : ${highRiskDimensions.join(', ')}. `;
+      reasoning += `Des mesures correctives immédiates sont requises avant toute mise en production.`;
+    } else if (riskLevel === 'high') {
+      reasoning += `Le système présente un risque élevé nécessitant des obligations de conformité strictes. `;
+      reasoning += `Dimensions critiques : ${highRiskDimensions.join(', ')}.`;
+    } else if (riskLevel === 'limited') {
+      reasoning += `Le système présente un risque limité avec obligations de transparence. `;
+      reasoning += `Améliorations recommandées sur certaines dimensions.`;
+    } else {
+      reasoning += `Le système présente un risque minimal selon les critères d'évaluation. `;
+      reasoning += `Maintenir les bonnes pratiques actuelles.`;
+    }
+    
+    return reasoning;
+  }
+  
+  private getObligationsForRiskLevel(riskLevel: string): string[] {
+    const obligationsMap: Record<string, string[]> = {
+      'unacceptable': [
+        'INTERDICTION de mise sur le marché (Article 5 AI Act)',
+        'Arrêt immédiat de tout développement',
+        'Révision complète de la conception du système'
+      ],
+      'high': [
+        'Système de gestion de la qualité (Article 17)',
+        'Documentation technique détaillée (Article 18)',
+        'Conservation automatique des logs (Article 19)',
+        'Transparence et information aux utilisateurs (Article 20)',
+        'Supervision humaine appropriée (Article 21)',
+        'Robustesse, exactitude et cybersécurité (Article 22)'
+      ],
+      'limited': [
+        'Obligation d\'information sur l\'usage de l\'IA (Article 50)',
+        'Transparence pour les utilisateurs finaux',
+        'Documentation des capacités et limitations'
+      ],
+      'minimal': [
+        'Respect des principes généraux de l\'IA éthique',
+        'Surveillance des impacts potentiels'
+      ]
+    };
+    
+    return obligationsMap[riskLevel] || [];
+  }
+  
+  private generateDimensionRecommendationsV3(dimensionScores: Record<string, { score: number; riskLevel: string }>): string[] {
+    const recommendations: string[] = [];
+    
+    for (const [dimension, scoreData] of Object.entries(dimensionScores)) {
+      if (scoreData.score < 70) {
+        const dimensionName = this.getDimensionDisplayName(dimension);
+        recommendations.push(`Améliorer la dimension "${dimensionName}" (score: ${scoreData.score}/100)`);
+      }
+    }
+    
+    if (recommendations.length === 0) {
+      recommendations.push('Maintenir les bonnes pratiques actuelles');
+      recommendations.push('Surveillance continue des performances');
+    }
+    
+    return recommendations;
+  }
+  
+  private getDimensionRecommendationsForScore(dimension: string, score: number): string[] {
+    const recommendationsMap: Record<string, Record<string, string[]>> = {
+      'justice_fairness': {
+        'low': ['Audit complet des biais', 'Formation des équipes', 'Diversification des données'],
+        'medium': ['Tests réguliers d\'équité', 'Monitoring des biais'],
+        'high': ['Maintenir la surveillance', 'Optimiser les métriques']
+      },
+      'transparency_explainability': {
+        'low': ['Développer l\'explicabilité', 'Documentation utilisateur', 'Formation à l\'IA'],
+        'medium': ['Améliorer les explications', 'Interface utilisateur'],
+        'high': ['Maintenir la transparence', 'Optimiser l\'UX']
+      }
+      // Ajouter d'autres dimensions...
+    };
+    
+    const level = score < 50 ? 'low' : score < 80 ? 'medium' : 'high';
+    return recommendationsMap[dimension]?.[level] || ['Améliorer cette dimension'];
+  }
+  
+  private getDimensionDisplayName(dimension: string): string {
+    const nameMap: Record<string, string> = {
+      'justice_fairness': 'Justice et équité',
+      'transparency_explainability': 'Transparence et explicabilité',
+      'human_ai_interaction': 'Interaction humaine-IA',
+      'social_environmental_impact': 'Impact social et environnemental',
+      'responsibility': 'Responsabilité',
+      'data_privacy': 'Données et vie privée',
+      'technical_robustness_security': 'Robustesse technique et sécurité'
+    };
+    
+    return nameMap[dimension] || dimension;
+  }
+  
+  private generateActionTimelineV3(
+    dimensionScores: Record<string, { score: number; riskLevel: string }>, 
+    riskLevel: string
+  ): {
+    immediate: string[];
+    short_term: string[];
+    long_term: string[];
+  } {
+    const timeline = {
+      immediate: [] as string[],
+      short_term: [] as string[],
+      long_term: [] as string[]
+    };
+    
+    if (riskLevel === 'unacceptable' || riskLevel === 'high') {
+      timeline.immediate.push('Évaluation de conformité obligatoire');
+      timeline.immediate.push('Mise en place de la supervision humaine');
+      timeline.short_term.push('Documentation technique complète');
+      timeline.short_term.push('Tests de robustesse et sécurité');
+      timeline.long_term.push('Audit de conformité périodique');
+    } else if (riskLevel === 'limited') {
+      timeline.short_term.push('Améliorer la transparence utilisateur');
+      timeline.short_term.push('Documentation des limitations');
+      timeline.long_term.push('Monitoring des performances');
+    } else {
+      timeline.long_term.push('Surveillance continue des bonnes pratiques');
+      timeline.long_term.push('Veille réglementaire');
+    }
+    
+    return timeline;
   }
 }
 
