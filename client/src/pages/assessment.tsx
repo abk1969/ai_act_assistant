@@ -345,9 +345,7 @@ export default function Assessment() {
 
   const assessmentMutation = useMutation({
     mutationFn: async (data: AssessmentFormData) => {
-      console.log('Mutation function called with data:', data);
       const response = await apiRequest('POST', '/api/assessments', data);
-      console.log('Response received:', response);
       return response.json();
     },
     onSuccess: (data: AssessmentResult) => {
@@ -372,10 +370,6 @@ export default function Assessment() {
   });
 
   const handleFormSubmit = () => {
-    console.log('Form submit clicked');
-    console.log('Form valid:', isFormValid());
-    console.log('Form data:', formData);
-    console.log('Mutation pending:', assessmentMutation.isPending);
     assessmentMutation.mutate(formData);
   };
 
@@ -394,24 +388,12 @@ export default function Assessment() {
     const requiredQuestions = RISK_ASSESSMENT_DIMENSIONS.flatMap(d => d.questions.map(q => q.id));
     const answeredQuestions = Object.keys(formData.responses);
     
-    const valid = (
+    return (
       formData.systemName.trim() !== '' &&
       formData.industrySector !== '' &&
       formData.primaryUseCase !== '' &&
       requiredQuestions.every(q => answeredQuestions.includes(q))
     );
-    
-    console.log('Form validation check:', {
-      systemName: formData.systemName.trim() !== '',
-      industrySector: formData.industrySector !== '',
-      primaryUseCase: formData.primaryUseCase !== '',
-      totalQuestions: requiredQuestions.length,
-      answeredQuestions: answeredQuestions.length,
-      allQuestionsAnswered: requiredQuestions.every(q => answeredQuestions.includes(q)),
-      valid
-    });
-    
-    return valid;
   };
 
   const getTotalProgress = () => {
@@ -718,10 +700,8 @@ export default function Assessment() {
                   onClick={handleFormSubmit}
                   disabled={!isFormValid() || assessmentMutation.isPending}
                   data-testid="button-submit-assessment"
-                  className={(!isFormValid() || assessmentMutation.isPending) ? 'opacity-50 cursor-not-allowed' : ''}
                 >
                   {assessmentMutation.isPending ? 'Évaluation en cours...' : 'Lancer l\'évaluation'}
-                  {!isFormValid() && ' (Formulaire incomplet)'}
                 </Button>
               )}
             </div>
