@@ -178,9 +178,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   // Risk Assessment routes
   app.post('/api/assessments', isAuthenticated, async (req: any, res) => {
+    let formData;
     try {
       const userId = req.user.id;
-      const formData = req.body;
+      formData = req.body;
       
       // Perform risk assessment
       const result = await assessmentService.performRiskAssessment(formData, userId);

@@ -9,6 +9,7 @@ import {
   boolean,
   index,
   pgEnum,
+  unique,
 } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
@@ -275,7 +276,10 @@ export const llmSettings = pgTable("llm_settings", {
   isActive: boolean("is_active").default(false),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
-});
+}, (table) => ({
+  // Contrainte unique : un seul provider par utilisateur
+  uniqueUserProvider: unique().on(table.userId, table.provider),
+}));
 
 // Organizational maturity assessments table (Extended for Positive AI Framework v3.0)
 export const maturityAssessments = pgTable("maturity_assessments", {

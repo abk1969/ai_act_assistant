@@ -137,6 +137,9 @@ class AssessmentService {
 
   private getDimensionScoreFromResponses(responses: Record<string, number>, dimension: string): number {
     // Calculer le score moyen pour une dimension à partir des réponses
+    if (!responses || typeof responses !== 'object') {
+      return 50; // Score par défaut si responses n'est pas valide
+    }
     const dimensionQuestions = Object.keys(responses).filter(key => key.startsWith(dimension));
     if (dimensionQuestions.length === 0) return 50; // Score par défaut
     
@@ -1280,7 +1283,7 @@ class AssessmentService {
       industrySector: formData.industrySector,
       primaryUseCase: formData.primaryUseCase,
       systemDescription: formData.systemDescription,
-      responses: formData.frameworkResponses || {}
+      responses: (formData.frameworkResponses as Record<string, Record<string, number>>) || {}
     };
     
     const frameworkResult = await this.assessFrameworkV3(frameworkData);
@@ -1350,21 +1353,34 @@ class AssessmentService {
 
   private transformDimensionResults(dimensionResults: Record<string, any>): Record<string, {
     score: number;
-    riskLevel: string;
-    recommendations: string[];
+    level: 'critical' | 'excellent' | 'good' | 'adequate' | 'needs_improvement';
+    strengths: string[];
+    improvements: string[];
   }> {
     const transformed: Record<string, {
       score: number;
-      riskLevel: string;
-      recommendations: string[];
+      level: 'critical' | 'excellent' | 'good' | 'adequate' | 'needs_improvement';
+      strengths: string[];
+      improvements: string[];
     }> = {};
     
     for (const [key, value] of Object.entries(dimensionResults)) {
       const result = value as any;
+      const score = result?.score || 0;
+      
+      // Map score to level
+      let level: 'critical' | 'excellent' | 'good' | 'adequate' | 'needs_improvement';
+      if (score >= 90) level = 'excellent';
+      else if (score >= 75) level = 'good';
+      else if (score >= 60) level = 'adequate';
+      else if (score >= 40) level = 'needs_improvement';
+      else level = 'critical';
+      
       transformed[key] = {
-        score: result?.score || 0,
-        riskLevel: result?.level || 'minimal',
-        recommendations: result?.improvements || []
+        score,
+        level,
+        strengths: this.getDimensionStrengths(key, score),
+        improvements: this.getDimensionImprovements(key, score)
       };
     }
     
