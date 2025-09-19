@@ -394,12 +394,24 @@ export default function Assessment() {
     const requiredQuestions = RISK_ASSESSMENT_DIMENSIONS.flatMap(d => d.questions.map(q => q.id));
     const answeredQuestions = Object.keys(formData.responses);
     
-    return (
+    const valid = (
       formData.systemName.trim() !== '' &&
       formData.industrySector !== '' &&
       formData.primaryUseCase !== '' &&
       requiredQuestions.every(q => answeredQuestions.includes(q))
     );
+    
+    console.log('Form validation check:', {
+      systemName: formData.systemName.trim() !== '',
+      industrySector: formData.industrySector !== '',
+      primaryUseCase: formData.primaryUseCase !== '',
+      totalQuestions: requiredQuestions.length,
+      answeredQuestions: answeredQuestions.length,
+      allQuestionsAnswered: requiredQuestions.every(q => answeredQuestions.includes(q)),
+      valid
+    });
+    
+    return valid;
   };
 
   const getTotalProgress = () => {
@@ -706,8 +718,10 @@ export default function Assessment() {
                   onClick={handleFormSubmit}
                   disabled={!isFormValid() || assessmentMutation.isPending}
                   data-testid="button-submit-assessment"
+                  className={(!isFormValid() || assessmentMutation.isPending) ? 'opacity-50 cursor-not-allowed' : ''}
                 >
                   {assessmentMutation.isPending ? 'Évaluation en cours...' : 'Lancer l\'évaluation'}
+                  {!isFormValid() && ' (Formulaire incomplet)'}
                 </Button>
               )}
             </div>
