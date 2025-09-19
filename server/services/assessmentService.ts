@@ -97,10 +97,27 @@ class AssessmentService {
 
   private adaptFromFrameworkV3(formData: RiskAssessmentFormData): EUAiActInput {
     // Dériver les signaux EU AI Act des réponses Framework v3.0
-    const transparencyScore = this.getDimensionScoreFromResponses(formData.frameworkResponses, 'transparency_explainability');
-    const oversightScore = this.getDimensionScoreFromResponses(formData.frameworkResponses, 'human_ai_interaction');
-    const robustnessScore = this.getDimensionScoreFromResponses(formData.frameworkResponses, 'technical_robustness_security');
-    const fairnessScore = this.getDimensionScoreFromResponses(formData.frameworkResponses, 'justice_fairness');
+    // Support both new frameworkResponses and legacy responses formats
+    const responses = formData.frameworkResponses || (formData as any).responses || {};
+    
+    // Detect response format and use appropriate scoring method
+    const isFrameworkV3Format = this.isResponseV3Format(responses);
+    
+    let transparencyScore, oversightScore, robustnessScore, fairnessScore;
+    
+    if (isFrameworkV3Format) {
+      // Use dimension-based scoring for Framework v3.0 format
+      transparencyScore = this.getDimensionScoreFromResponses(responses, 'transparency_explainability');
+      oversightScore = this.getDimensionScoreFromResponses(responses, 'human_ai_interaction');
+      robustnessScore = this.getDimensionScoreFromResponses(responses, 'technical_robustness_security');
+      fairnessScore = this.getDimensionScoreFromResponses(responses, 'justice_fairness');
+    } else {
+      // Use legacy response mapping
+      transparencyScore = this.calculateScoreFromLegacyResponses(responses, ['explainability_risk', 'user_awareness']);
+      oversightScore = this.calculateScoreFromLegacyResponses(responses, ['human_oversight', 'override_capability']);
+      robustnessScore = this.calculateScoreFromLegacyResponses(responses, ['security_risk', 'robustness_risk']);
+      fairnessScore = this.calculateScoreFromLegacyResponses(responses, ['bias_risk', 'protected_groups']);
+    }
     
     // Mapper les scores Framework v3.0 vers niveaux catégoriels EU AI Act (≥70 → high, 40–69 → medium, else low)
     const scoreToLevel = (score: number): 'high' | 'medium' | 'low' => {
@@ -118,9 +135,9 @@ class AssessmentService {
     return {
       systemName: formData.systemName,
       sector: formData.industrySector || 'technology_software',
-      applicationDomain: formData.applicationDomain,
-      userCategories: formData.userCategories,
-      geographicalScope: formData.geographicalScope,
+      applicationDomain: formData.applicationDomain || formData.primaryUseCase || 'general',
+      userCategories: formData.userCategories || ['general'],
+      geographicalScope: formData.geographicalScope || 'local',
       
       // Dériver des Framework v3.0 responses avec mapping intelligent
       sensitiveData: formData.sensitiveData || (fairnessScore < 50 ? 'yes' : 'limited'),
@@ -176,6 +193,39 @@ class AssessmentService {
     // Fallback: return unknown for unrecognized prefixes
     console.warn(`Unknown question ID prefix for: ${questionId}`);
     return 'unknown';
+  }
+
+  // Helper for safe string operations
+  private safeLower(value: string | undefined | null): string {
+    return (value || '').toLowerCase();
+  }
+  
+  // Detect if responses are in Framework v3.0 format
+  private isResponseV3Format(responses: Record<string, number>): boolean {
+    const frameworkV3Patterns = ['justice_', 'transparency_', 'human_', 'social_', 'responsibility_', 'data_', 'technical_'];
+    const responseKeys = Object.keys(responses);
+    
+    // If any key matches v3 patterns, assume it's v3 format
+    return responseKeys.some(key => 
+      frameworkV3Patterns.some(pattern => key.startsWith(pattern))
+    );
+  }
+  
+  // Calculate dimension score from legacy response format
+  private calculateScoreFromLegacyResponses(responses: Record<string, number>, questionKeys: string[]): number {
+    if (!responses || typeof responses !== 'object') {
+      return 50; // Score par défaut
+    }
+    
+    const relevantResponses = questionKeys
+      .map(key => responses[key])
+      .filter(value => value !== undefined && value !== null);
+    
+    if (relevantResponses.length === 0) return 50;
+    
+    const averageResponse = relevantResponses.reduce((sum, val) => sum + val, 0) / relevantResponses.length;
+    // Convert to 0-100 scale (assuming responses are 0-100 already or need scaling)
+    return Math.round(averageResponse);
   }
 
   private getDimensionScoreFromResponses(responses: Record<string, number>, dimension: string): number {
@@ -254,39 +304,42 @@ class AssessmentService {
     const prohibitedScenarios = [];
 
     // Article 5(1)(a) - Subliminal techniques or manipulative techniques
-    if (input.applicationDomain.toLowerCase().includes('subliminal') ||
-        input.applicationDomain.toLowerCase().includes('manipulation') ||
-        input.applicationDomain.toLowerCase().includes('cognitive behavioral') ||
+    const applicationDomain = this.safeLower(input.applicationDomain);
+    const sector = this.safeLower(input.sector);
+    
+    if (applicationDomain.includes('subliminal') ||
+        applicationDomain.includes('manipulation') ||
+        applicationDomain.includes('cognitive behavioral') ||
         (input.userInformed === 'none' && input.autonomyLevel === 'high')) {
       prohibitedScenarios.push('Techniques subliminales ou manipulatrices (Article 5(1)(a))');
     }
 
     // Article 5(1)(b) - Social scoring by public authorities
-    if (input.applicationDomain.toLowerCase().includes('social scoring') ||
-        input.applicationDomain.toLowerCase().includes('social credit') ||
-        input.applicationDomain.toLowerCase().includes('citizen rating') ||
-        (input.sector.toLowerCase().includes('government') && 
-         input.applicationDomain.toLowerCase().includes('scoring'))) {
+    if (applicationDomain.includes('social scoring') ||
+        applicationDomain.includes('social credit') ||
+        applicationDomain.includes('citizen rating') ||
+        (sector.includes('government') && 
+         applicationDomain.includes('scoring'))) {
       prohibitedScenarios.push('Notation sociale par les autorités publiques (Article 5(1)(b))');
     }
 
     // Article 5(1)(c) - Biometric categorisation based on sensitive characteristics
-    if ((input.applicationDomain.toLowerCase().includes('biometric') &&
-         (input.applicationDomain.toLowerCase().includes('race') ||
-          input.applicationDomain.toLowerCase().includes('religion') ||
-          input.applicationDomain.toLowerCase().includes('sexual') ||
-          input.applicationDomain.toLowerCase().includes('political'))) ||
+    if ((applicationDomain.includes('biometric') &&
+         (applicationDomain.includes('race') ||
+          applicationDomain.includes('religion') ||
+          applicationDomain.includes('sexual') ||
+          applicationDomain.includes('political'))) ||
         (input.sensitiveData === 'yes' && input.discriminationRisk === 'high')) {
       prohibitedScenarios.push('Catégorisation biométrique sur des caractéristiques sensibles (Article 5(1)(c))');
     }
 
     // Article 5(1)(d) - Real-time biometric identification in public spaces (with law enforcement context)
-    if (input.applicationDomain.toLowerCase().includes('real-time biometric') ||
-        (input.applicationDomain.toLowerCase().includes('biometric identification') &&
+    if (applicationDomain.includes('real-time biometric') ||
+        (applicationDomain.includes('biometric identification') &&
          input.geographicalScope !== 'local' &&
          input.safetyImpact === 'critical' &&
-         !input.sector.toLowerCase().includes('law') &&
-         !input.sector.toLowerCase().includes('security') &&
+         !sector.includes('law') &&
+         !sector.includes('security') &&
          !input.applicationDomain.toLowerCase().includes('law enforcement'))) {
       prohibitedScenarios.push('Identification biométrique en temps réel dans espaces publics (Article 5(1)(d))');
     }

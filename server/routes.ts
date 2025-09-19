@@ -204,7 +204,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("Error performing risk assessment:", error);
       console.error("Error stack:", error instanceof Error ? error.stack : 'No stack trace');
-      console.error("Form data received:", formData);
+      console.error("Assessment failed for system:", formData?.systemName || 'Unknown');
       
       // Return 400 for Zod validation errors, 500 for other errors
       if (error instanceof z.ZodError) {
