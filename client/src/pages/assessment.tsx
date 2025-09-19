@@ -749,92 +749,104 @@ export default function Assessment() {
                 </div>
 
                 {/* Obligations */}
-                <div>
-                  <h4 className="text-lg font-semibold text-foreground mb-3">Obligations applicables</h4>
-                  <div className="space-y-2">
-                    {assessmentResult.obligations.map((obligation, index) => (
-                      <div 
-                        key={index} 
-                        className="flex items-start gap-2 p-3 bg-muted rounded-lg"
-                        data-testid={`obligation-${index}`}
-                      >
-                        <CheckCircle className="h-4 w-4 text-primary mt-0.5 flex-shrink-0" />
-                        <span className="text-sm text-foreground">{obligation}</span>
-                      </div>
-                    ))}
+                {assessmentResult.obligations && assessmentResult.obligations.length > 0 && (
+                  <div>
+                    <h4 className="text-lg font-semibold text-foreground mb-3">Obligations applicables</h4>
+                    <div className="space-y-2">
+                      {assessmentResult.obligations.map((obligation, index) => (
+                        <div 
+                          key={index} 
+                          className="flex items-start gap-2 p-3 bg-muted rounded-lg"
+                          data-testid={`obligation-${index}`}
+                        >
+                          <CheckCircle className="h-4 w-4 text-primary mt-0.5 flex-shrink-0" />
+                          <span className="text-sm text-foreground">{obligation}</span>
+                        </div>
+                      ))}
+                    </div>
                   </div>
-                </div>
+                )}
 
                 {/* Recommendations */}
-                <div>
-                  <h4 className="text-lg font-semibold text-foreground mb-3">Recommandations</h4>
-                  <div className="space-y-2">
-                    {assessmentResult.recommendations.map((recommendation, index) => (
-                      <div 
-                        key={index} 
-                        className="flex items-start gap-2 p-3 bg-blue-50 rounded-lg"
-                        data-testid={`recommendation-${index}`}
-                      >
-                        <AlertTriangle className="h-4 w-4 text-blue-600 mt-0.5 flex-shrink-0" />
-                        <span className="text-sm text-blue-800">{recommendation}</span>
-                      </div>
-                    ))}
+                {assessmentResult.recommendations && assessmentResult.recommendations.length > 0 && (
+                  <div>
+                    <h4 className="text-lg font-semibold text-foreground mb-3">Recommandations</h4>
+                    <div className="space-y-2">
+                      {assessmentResult.recommendations.map((recommendation, index) => (
+                        <div 
+                          key={index} 
+                          className="flex items-start gap-2 p-3 bg-blue-50 rounded-lg"
+                          data-testid={`recommendation-${index}`}
+                        >
+                          <AlertTriangle className="h-4 w-4 text-blue-600 mt-0.5 flex-shrink-0" />
+                          <span className="text-sm text-blue-800">{recommendation}</span>
+                        </div>
+                      ))}
+                    </div>
                   </div>
-                </div>
+                )}
 
                 {/* Timeline */}
-                <div>
-                  <h4 className="text-lg font-semibold text-foreground mb-3">Plan d'action</h4>
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                    {/* Immediate Actions */}
-                    <Card>
-                      <CardHeader className="pb-3">
-                        <CardTitle className="text-sm text-red-600">Actions immédiates</CardTitle>
-                      </CardHeader>
-                      <CardContent className="pt-0">
-                        <div className="space-y-2">
-                          {assessmentResult.timeline.immediate.map((action, index) => (
-                            <div key={index} className="text-xs text-muted-foreground p-2 bg-red-50 rounded">
-                              {action}
+                {assessmentResult.timeline && (
+                  <div>
+                    <h4 className="text-lg font-semibold text-foreground mb-3">Plan d'action</h4>
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                      {/* Immediate Actions */}
+                      {assessmentResult.timeline.immediate && assessmentResult.timeline.immediate.length > 0 && (
+                        <Card>
+                          <CardHeader className="pb-3">
+                            <CardTitle className="text-sm text-red-600">Actions immédiates</CardTitle>
+                          </CardHeader>
+                          <CardContent className="pt-0">
+                            <div className="space-y-2">
+                              {assessmentResult.timeline.immediate.map((action, index) => (
+                                <div key={index} className="text-xs text-muted-foreground p-2 bg-red-50 rounded">
+                                  {action}
+                                </div>
+                              ))}
                             </div>
-                          ))}
-                        </div>
-                      </CardContent>
-                    </Card>
+                          </CardContent>
+                        </Card>
+                      )}
 
-                    {/* Short Term Actions */}
-                    <Card>
-                      <CardHeader className="pb-3">
-                        <CardTitle className="text-sm text-orange-600">Court terme</CardTitle>
-                      </CardHeader>
-                      <CardContent className="pt-0">
-                        <div className="space-y-2">
-                          {assessmentResult.timeline.short_term.map((action, index) => (
-                            <div key={index} className="text-xs text-muted-foreground p-2 bg-orange-50 rounded">
-                              {action}
+                      {/* Short Term Actions */}
+                      {assessmentResult.timeline.short_term && assessmentResult.timeline.short_term.length > 0 && (
+                        <Card>
+                          <CardHeader className="pb-3">
+                            <CardTitle className="text-sm text-orange-600">Court terme</CardTitle>
+                          </CardHeader>
+                          <CardContent className="pt-0">
+                            <div className="space-y-2">
+                              {assessmentResult.timeline.short_term.map((action, index) => (
+                                <div key={index} className="text-xs text-muted-foreground p-2 bg-orange-50 rounded">
+                                  {action}
+                                </div>
+                              ))}
                             </div>
-                          ))}
-                        </div>
-                      </CardContent>
-                    </Card>
+                          </CardContent>
+                        </Card>
+                      )}
 
-                    {/* Long Term Actions */}
-                    <Card>
-                      <CardHeader className="pb-3">
-                        <CardTitle className="text-sm text-green-600">Long terme</CardTitle>
-                      </CardHeader>
-                      <CardContent className="pt-0">
-                        <div className="space-y-2">
-                          {assessmentResult.timeline.long_term.map((action, index) => (
-                            <div key={index} className="text-xs text-muted-foreground p-2 bg-green-50 rounded">
-                              {action}
+                      {/* Long Term Actions */}
+                      {assessmentResult.timeline.long_term && assessmentResult.timeline.long_term.length > 0 && (
+                        <Card>
+                          <CardHeader className="pb-3">
+                            <CardTitle className="text-sm text-green-600">Long terme</CardTitle>
+                          </CardHeader>
+                          <CardContent className="pt-0">
+                            <div className="space-y-2">
+                              {assessmentResult.timeline.long_term.map((action, index) => (
+                                <div key={index} className="text-xs text-muted-foreground p-2 bg-green-50 rounded">
+                                  {action}
+                                </div>
+                              ))}
                             </div>
-                          ))}
-                        </div>
-                      </CardContent>
-                    </Card>
+                          </CardContent>
+                        </Card>
+                      )}
+                    </div>
                   </div>
-                </div>
+                )}
               </div>
             </CardContent>
           </Card>
