@@ -135,12 +135,61 @@ class AssessmentService {
     };
   }
 
+  // Transform flat responses to nested structure by dimension
+  private transformFlatResponsesToNestedStructure(flatResponses: Record<string, number>): Record<string, Record<string, number>> {
+    const nestedResponses: Record<string, Record<string, number>> = {};
+    
+    // Group responses by dimension based on question ID prefix
+    for (const [questionId, response] of Object.entries(flatResponses)) {
+      // Extract dimension from question ID (e.g., "justice_1_1" -> "justice_fairness")
+      const dimensionId = this.extractDimensionFromQuestionId(questionId);
+      
+      if (!nestedResponses[dimensionId]) {
+        nestedResponses[dimensionId] = {};
+      }
+      
+      nestedResponses[dimensionId][questionId] = response;
+    }
+    
+    return nestedResponses;
+  }
+  
+  // Extract dimension ID from question ID
+  private extractDimensionFromQuestionId(questionId: string): string {
+    // Map question prefixes to dimension IDs
+    const prefixToDimension: Record<string, string> = {
+      'justice_': 'justice_fairness',
+      'transparency_': 'transparency_explainability', 
+      'human_': 'human_ai_interaction',
+      'social_': 'social_environmental_impact',
+      'responsibility_': 'responsibility',
+      'data_': 'data_privacy',
+      'technical_': 'technical_robustness_security'
+    };
+    
+    for (const [prefix, dimensionId] of Object.entries(prefixToDimension)) {
+      if (questionId.startsWith(prefix)) {
+        return dimensionId;
+      }
+    }
+    
+    // Fallback: return unknown for unrecognized prefixes
+    console.warn(`Unknown question ID prefix for: ${questionId}`);
+    return 'unknown';
+  }
+
   private getDimensionScoreFromResponses(responses: Record<string, number>, dimension: string): number {
     // Calculer le score moyen pour une dimension à partir des réponses
     if (!responses || typeof responses !== 'object') {
       return 50; // Score par défaut si responses n'est pas valide
     }
-    const dimensionQuestions = Object.keys(responses).filter(key => key.startsWith(dimension));
+    
+    // Find questions that belong to this dimension using proper mapping
+    const dimensionQuestions = Object.keys(responses).filter(questionId => {
+      const questionDimension = this.extractDimensionFromQuestionId(questionId);
+      return questionDimension === dimension;
+    });
+    
     if (dimensionQuestions.length === 0) return 50; // Score par défaut
     
     const totalScore = dimensionQuestions.reduce((sum, key) => sum + (responses[key] || 0), 0);
@@ -1283,7 +1332,7 @@ class AssessmentService {
       industrySector: formData.industrySector,
       primaryUseCase: formData.primaryUseCase,
       systemDescription: formData.systemDescription,
-      responses: (formData.frameworkResponses as unknown as Record<string, Record<string, number>>) || {}
+      responses: this.transformFlatResponsesToNestedStructure(formData.frameworkResponses || {})
     };
     
     const frameworkResult = await this.assessFrameworkV3(frameworkData);
