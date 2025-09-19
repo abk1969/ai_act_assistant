@@ -1283,7 +1283,7 @@ class AssessmentService {
       industrySector: formData.industrySector,
       primaryUseCase: formData.primaryUseCase,
       systemDescription: formData.systemDescription,
-      responses: (formData.frameworkResponses as Record<string, Record<string, number>>) || {}
+      responses: (formData.frameworkResponses as unknown as Record<string, Record<string, number>>) || {}
     };
     
     const frameworkResult = await this.assessFrameworkV3(frameworkData);
