@@ -345,7 +345,9 @@ export default function Assessment() {
 
   const assessmentMutation = useMutation({
     mutationFn: async (data: AssessmentFormData) => {
+      console.log('Mutation function called with data:', data);
       const response = await apiRequest('POST', '/api/assessments', data);
+      console.log('Response received:', response);
       return response.json();
     },
     onSuccess: (data: AssessmentResult) => {
@@ -370,6 +372,10 @@ export default function Assessment() {
   });
 
   const handleFormSubmit = () => {
+    console.log('Form submit clicked');
+    console.log('Form valid:', isFormValid());
+    console.log('Form data:', formData);
+    console.log('Mutation pending:', assessmentMutation.isPending);
     assessmentMutation.mutate(formData);
   };
 
