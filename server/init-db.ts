@@ -63,11 +63,8 @@ export async function initializeDatabase() {
     console.log('🎉 Database initialization complete!');
     return true;
   } catch (error: any) {
-    if (error.message?.includes('disabled')) {
-      console.error('❌ Database is disabled. Please reactivate it at https://console.neon.tech');
-      return false;
-    }
     console.error('❌ Database initialization error:', error.message);
+    console.error('💡 Ensure DATABASE_URL is set and PostgreSQL server is accessible');
     return false;
   }
 }
