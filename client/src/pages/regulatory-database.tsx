@@ -154,10 +154,17 @@ export default function RegulatoryDatabase() {
             </div>
           </div>
 
-          {/* Statistics Cards avec animations */}
+          {/* Statistics Cards avec animations et cliquables */}
           {stats && (
             <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
-              <Card className="hover:shadow-xl transition-all duration-300 border-l-4 border-l-blue-500 hover:scale-105">
+              <Card
+                className="hover:shadow-xl transition-all duration-300 border-l-4 border-l-blue-500 hover:scale-105 cursor-pointer"
+                onClick={() => {
+                  setSearchQuery('');
+                  setSelectedRiskCategory('all');
+                  setSelectedTitle('all');
+                }}
+              >
                 <CardContent className="pt-6">
                   <div className="flex items-center justify-between">
                     <div>
@@ -168,10 +175,17 @@ export default function RegulatoryDatabase() {
                       <BookOpen className="w-6 h-6 text-blue-600" />
                     </div>
                   </div>
-                  <div className="mt-3 text-xs text-blue-600 font-semibold">✓ Base complète</div>
+                  <div className="mt-3 text-xs text-blue-600 font-semibold">✓ Cliquez pour voir tous</div>
                 </CardContent>
               </Card>
-              <Card className="hover:shadow-xl transition-all duration-300 border-l-4 border-l-red-500 hover:scale-105">
+              <Card
+                className="hover:shadow-xl transition-all duration-300 border-l-4 border-l-red-500 hover:scale-105 cursor-pointer"
+                onClick={() => {
+                  setSearchQuery('');
+                  setSelectedRiskCategory('unacceptable');
+                  setSelectedTitle('all');
+                }}
+              >
                 <CardContent className="pt-6">
                   <div className="flex items-center justify-between">
                     <div>
@@ -182,10 +196,17 @@ export default function RegulatoryDatabase() {
                       <AlertTriangle className="w-6 h-6 text-red-600" />
                     </div>
                   </div>
-                  <div className="mt-3 text-xs text-red-600 font-semibold">Article 5</div>
+                  <div className="mt-3 text-xs text-red-600 font-semibold">✓ Cliquez pour filtrer</div>
                 </CardContent>
               </Card>
-              <Card className="hover:shadow-xl transition-all duration-300 border-l-4 border-l-orange-500 hover:scale-105">
+              <Card
+                className="hover:shadow-xl transition-all duration-300 border-l-4 border-l-orange-500 hover:scale-105 cursor-pointer"
+                onClick={() => {
+                  setSearchQuery('');
+                  setSelectedRiskCategory('high');
+                  setSelectedTitle('all');
+                }}
+              >
                 <CardContent className="pt-6">
                   <div className="flex items-center justify-between">
                     <div>
@@ -196,10 +217,17 @@ export default function RegulatoryDatabase() {
                       <Shield className="w-6 h-6 text-orange-600" />
                     </div>
                   </div>
-                  <div className="mt-3 text-xs text-orange-600 font-semibold">Titre III</div>
+                  <div className="mt-3 text-xs text-orange-600 font-semibold">✓ Cliquez pour filtrer</div>
                 </CardContent>
               </Card>
-              <Card className="hover:shadow-xl transition-all duration-300 border-l-4 border-l-purple-500 hover:scale-105">
+              <Card
+                className="hover:shadow-xl transition-all duration-300 border-l-4 border-l-purple-500 hover:scale-105 cursor-pointer"
+                onClick={() => {
+                  setSearchQuery('échéance');
+                  setSelectedRiskCategory('all');
+                  setSelectedTitle('all');
+                }}
+              >
                 <CardContent className="pt-6">
                   <div className="flex items-center justify-between">
                     <div>
@@ -212,7 +240,7 @@ export default function RegulatoryDatabase() {
                       <Calendar className="w-6 h-6 text-purple-600" />
                     </div>
                   </div>
-                  <div className="mt-3 text-xs text-purple-600 font-semibold">2025-2027</div>
+                  <div className="mt-3 text-xs text-purple-600 font-semibold">✓ Cliquez pour voir</div>
                 </CardContent>
               </Card>
             </div>
