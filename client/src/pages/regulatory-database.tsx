@@ -3,7 +3,7 @@
  * Inspired by artificialintelligenceact.eu and enterprise compliance platforms
  */
 
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Search, Filter, Download, BookOpen, AlertTriangle, Shield, Eye, Sparkles, Calendar, Tag, ChevronRight, ExternalLink, Star, BookmarkPlus } from 'lucide-react';
 import { Input } from '@/components/ui/input';
@@ -60,6 +60,16 @@ export default function RegulatoryDatabase() {
   const [selectedArticle, setSelectedArticle] = useState<CompleteArticle | null>(null);
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('list');
   const [favorites, setFavorites] = useState<Set<string>>(new Set());
+
+  // Ref for scrolling to results section
+  const resultsRef = useRef<HTMLDivElement>(null);
+
+  // Function to scroll to results
+  const scrollToResults = () => {
+    setTimeout(() => {
+      resultsRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }, 100);
+  };
 
   // Fetch statistics
   const { data: stats } = useQuery<ArticleStats>({
@@ -163,6 +173,7 @@ export default function RegulatoryDatabase() {
                   setSearchQuery('');
                   setSelectedRiskCategory('all');
                   setSelectedTitle('all');
+                  scrollToResults();
                 }}
               >
                 <CardContent className="pt-6">
@@ -184,6 +195,7 @@ export default function RegulatoryDatabase() {
                   setSearchQuery('');
                   setSelectedRiskCategory('unacceptable');
                   setSelectedTitle('all');
+                  scrollToResults();
                 }}
               >
                 <CardContent className="pt-6">
@@ -205,6 +217,7 @@ export default function RegulatoryDatabase() {
                   setSearchQuery('');
                   setSelectedRiskCategory('high');
                   setSelectedTitle('all');
+                  scrollToResults();
                 }}
               >
                 <CardContent className="pt-6">
@@ -226,6 +239,7 @@ export default function RegulatoryDatabase() {
                   setSearchQuery('échéance');
                   setSelectedRiskCategory('all');
                   setSelectedTitle('all');
+                  scrollToResults();
                 }}
               >
                 <CardContent className="pt-6">
@@ -316,7 +330,7 @@ export default function RegulatoryDatabase() {
       </div>
 
       {/* Results */}
-      <div className="container mx-auto px-6 py-8">
+      <div ref={resultsRef} className="container mx-auto px-6 py-8">
         <div className="mb-4 flex items-center justify-between">
           <div className="text-sm text-gray-600">
             {searchResults?.length || 0} article(s) trouvé(s)
