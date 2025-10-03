@@ -5,12 +5,27 @@ import MetricsCards from "@/components/dashboard/metrics-cards";
 import RiskDistribution from "@/components/dashboard/risk-distribution";
 import ActionItems from "@/components/dashboard/action-items";
 
+interface DashboardMetrics {
+  totalSystems: number;
+  highRiskSystems: number;
+  complianceScore: number;
+  pendingActions: number;
+  riskDistribution?: any;
+}
+
+interface RegulatoryUpdate {
+  id: string;
+  title: string;
+  date: string;
+  description: string;
+}
+
 export default function Home() {
-  const { data: metrics, isLoading } = useQuery({
+  const { data: metrics, isLoading } = useQuery<DashboardMetrics>({
     queryKey: ['/api/dashboard/metrics'],
   });
 
-  const { data: updates } = useQuery({
+  const { data: updates } = useQuery<RegulatoryUpdate[]>({
     queryKey: ['/api/regulatory/updates'],
     select: (data) => data?.slice(0, 3) || [],
   });

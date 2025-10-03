@@ -10,6 +10,7 @@ import Assessment from "@/pages/assessment";
 import Maturity from "@/pages/maturity";
 import FrameworkAssessment from "@/pages/framework";
 import Database from "@/pages/database";
+import RegulatoryDatabase from "@/pages/regulatory-database";
 import Compliance from "@/pages/compliance";
 import Documents from "@/pages/documents";
 import Certificates from "@/pages/certificates";
@@ -41,6 +42,7 @@ function Router() {
           <Route path="/maturity" component={Maturity} />
           <Route path="/framework" component={FrameworkAssessment} />
           <Route path="/database" component={Database} />
+          <Route path="/regulatory-database" component={RegulatoryDatabase} />
           <Route path="/compliance" component={Compliance} />
           <Route path="/documents" component={Documents} />
           <Route path="/certificates" component={Certificates} />

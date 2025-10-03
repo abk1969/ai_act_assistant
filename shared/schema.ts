@@ -51,8 +51,11 @@ export const maturityLevelEnum = pgEnum('maturity_level', ['initial', 'developin
 export const mfaTypeEnum = pgEnum('mfa_type', ['totp', 'backup_code']);
 export const securityEventTypeEnum = pgEnum('security_event_type', [
   'login_success', 'login_failed', 'logout', 'password_changed', 'mfa_enabled',
-  'mfa_disabled', 'mfa_verified', 'password_reset_requested', 'password_reset_completed',
-  'account_locked', 'account_unlocked', 'suspicious_activity'
+  'mfa_disabled', 'mfa_verified', 'mfa_setup_initiated', 'mfa_backup_codes_regenerated',
+  'password_reset_requested', 'password_reset_completed',
+  'account_locked', 'account_unlocked', 'suspicious_activity',
+  'security_settings_updated', 'session_revoked', 'all_sessions_revoked',
+  'session_metadata_updated', 'unauthorized_access', 'api_access'
 ]);
 export const sessionStatusEnum = pgEnum('session_status', ['active', 'expired', 'revoked']);
 
@@ -232,6 +235,11 @@ export const aiActArticles = pgTable("ai_act_articles", {
   obligations: jsonb("obligations"),
   effectiveDate: timestamp("effective_date"),
   lastUpdated: timestamp("last_updated").defaultNow(),
+  keywords: jsonb("keywords").$type<string[]>(),
+  relatedArticles: jsonb("related_articles").$type<string[]>(),
+  practicalExamples: jsonb("practical_examples").$type<string[]>(),
+  complianceChecklist: jsonb("compliance_checklist").$type<string[]>(),
+  sanctions: text("sanctions"),
 });
 
 // Compliance records table

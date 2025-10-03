@@ -43,7 +43,7 @@ class LLMService {
   async generateResponse(
     prompt: string,
     userId: string,
-    options?: { systemPrompt?: string; maxTokens?: number }
+    options?: { systemPrompt?: string; maxTokens?: number; timeout?: number }
   ): Promise<LLMResponse> {
     const settings = await storage.getActiveLlmSettings(userId);
     if (!settings) {
@@ -64,20 +64,39 @@ class LLMService {
 
     this.initializeClients(config);
 
-    switch (config.provider.toLowerCase()) {
-      case 'openai':
-        return await this.generateOpenAIResponse(prompt, config, options);
-      case 'google':
-      case 'gemini':
-        return await this.generateGeminiResponse(prompt, config, options);
-      case 'anthropic':
-        return await this.generateAnthropicResponse(prompt, config, options);
-      case 'ollama':
-        return await this.generateOllamaResponse(prompt, config, options);
-      case 'lmstudio':
-        return await this.generateLMStudioResponse(prompt, config, options);
-      default:
-        throw new Error(`Unsupported LLM provider: ${config.provider}`);
+    // Set default timeout to 60 seconds
+    const timeout = options?.timeout || 60000;
+
+    // Wrap the LLM call with a timeout
+    const timeoutPromise = new Promise<never>((_, reject) => {
+      setTimeout(() => {
+        reject(new Error(`LLM request timeout after ${timeout}ms for provider ${config.provider}`));
+      }, timeout);
+    });
+
+    const llmPromise = (async () => {
+      switch (config.provider.toLowerCase()) {
+        case 'openai':
+          return await this.generateOpenAIResponse(prompt, config, options);
+        case 'google':
+        case 'gemini':
+          return await this.generateGeminiResponse(prompt, config, options);
+        case 'anthropic':
+          return await this.generateAnthropicResponse(prompt, config, options);
+        case 'ollama':
+          return await this.generateOllamaResponse(prompt, config, options);
+        case 'lmstudio':
+          return await this.generateLMStudioResponse(prompt, config, options);
+        default:
+          throw new Error(`Unsupported LLM provider: ${config.provider}`);
+      }
+    })();
+
+    try {
+      return await Promise.race([llmPromise, timeoutPromise]);
+    } catch (error) {
+      console.error(`LLM request failed for provider ${config.provider}:`, error);
+      throw error;
     }
   }
 
@@ -193,67 +212,85 @@ class LLMService {
   private async generateOllamaResponse(
     prompt: string,
     config: LLMConfig,
-    options?: { systemPrompt?: string; maxTokens?: number }
+    options?: { systemPrompt?: string; maxTokens?: number; timeout?: number }
   ): Promise<LLMResponse> {
     const endpoint = config.endpoint || 'http://localhost:11434';
-    
-    const response = await fetch(`${endpoint}/api/generate`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        model: config.model,
-        prompt: options?.systemPrompt ? `${options.systemPrompt}\n\n${prompt}` : prompt,
-        stream: false,
-        options: {
-          temperature: config.temperature || 0.3,
-          num_predict: options?.maxTokens || 2000,
-        },
-      }),
-    });
+    const timeout = options?.timeout || 60000;
 
-    if (!response.ok) {
-      throw new Error(`Ollama API error: ${response.statusText}`);
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), timeout);
+
+    try {
+      const response = await fetch(`${endpoint}/api/generate`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          model: config.model,
+          prompt: options?.systemPrompt ? `${options.systemPrompt}\n\n${prompt}` : prompt,
+          stream: false,
+          options: {
+            temperature: config.temperature || 0.3,
+            num_predict: options?.maxTokens || 2000,
+          },
+        }),
+        signal: controller.signal,
+      });
+
+      if (!response.ok) {
+        throw new Error(`Ollama API error: ${response.statusText}`);
+      }
+
+      const data = await response.json();
+      return {
+        content: data.response || '',
+      };
+    } finally {
+      clearTimeout(timeoutId);
     }
-
-    const data = await response.json();
-    return {
-      content: data.response || '',
-    };
   }
 
   private async generateLMStudioResponse(
     prompt: string,
     config: LLMConfig,
-    options?: { systemPrompt?: string; maxTokens?: number }
+    options?: { systemPrompt?: string; maxTokens?: number; timeout?: number }
   ): Promise<LLMResponse> {
     const endpoint = config.endpoint || 'http://localhost:1234/v1';
-    
+    const timeout = options?.timeout || 60000;
+
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), timeout);
+
     const messages: any[] = [];
     if (options?.systemPrompt) {
       messages.push({ role: "system", content: options.systemPrompt });
     }
     messages.push({ role: "user", content: prompt });
 
-    const response = await fetch(`${endpoint}/chat/completions`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        model: config.model,
-        messages,
-        temperature: config.temperature || 0.3,
-        max_tokens: options?.maxTokens || 2000,
-      }),
-    });
+    try {
+      const response = await fetch(`${endpoint}/chat/completions`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          model: config.model,
+          messages,
+          temperature: config.temperature || 0.3,
+          max_tokens: options?.maxTokens || 2000,
+        }),
+        signal: controller.signal,
+      });
 
-    if (!response.ok) {
-      throw new Error(`LM Studio API error: ${response.statusText}`);
+      if (!response.ok) {
+        throw new Error(`LM Studio API error: ${response.statusText}`);
+      }
+
+      const data = await response.json();
+      return {
+        content: data.choices[0].message.content || '',
+        usage: data.usage,
+      };
+    } finally {
+      clearTimeout(timeoutId);
     }
-
-    const data = await response.json();
-    return {
-      content: data.choices[0].message.content || '',
-      usage: data.usage,
-    };
   }
 
   async initializeFromEnvironment(userId: string): Promise<void> {

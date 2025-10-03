@@ -37,14 +37,17 @@ export class PasswordService {
     };
 
     // Length validation
-    if (password.length < settings.passwordMinLength) {
-      errors.push(`Le mot de passe doit contenir au moins ${settings.passwordMinLength} caractères`);
-    } else if (password.length >= settings.passwordMinLength) {
+    const minLength = settings.passwordMinLength ?? 12;
+    const maxLength = settings.passwordMaxLength ?? 128;
+
+    if (password.length < minLength) {
+      errors.push(`Le mot de passe doit contenir au moins ${minLength} caractères`);
+    } else if (password.length >= minLength) {
       score += 20;
     }
 
-    if (password.length > settings.passwordMaxLength) {
-      errors.push(`Le mot de passe ne peut pas dépasser ${settings.passwordMaxLength} caractères`);
+    if (password.length > maxLength) {
+      errors.push(`Le mot de passe ne peut pas dépasser ${maxLength} caractères`);
     }
 
     // Character requirements
@@ -330,8 +333,8 @@ export class PasswordService {
       const user = await storage.getUser(userId);
       const securitySettings = await storage.getSecuritySettings();
       
-      if (!user || !securitySettings?.passwordExpirationDays || securitySettings.passwordExpirationDays === 0) {
-        return false; // No expiration policy
+      if (!user || !securitySettings?.passwordExpirationDays || securitySettings.passwordExpirationDays === 0 || !user.updatedAt) {
+        return false; // No expiration policy or no update date
       }
 
       const passwordAge = Date.now() - user.updatedAt.getTime();

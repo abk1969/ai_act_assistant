@@ -8,10 +8,6 @@ import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
 import { Shield, Smartphone, Key, Copy, CheckCircle, AlertTriangle } from 'lucide-react';
 
-interface MFASetupProps {
-  userId?: string;
-}
-
 interface MFAStatus {
   isEnabled: boolean;
   hasBackupCodes: boolean;
@@ -24,7 +20,7 @@ interface SetupData {
   backupCodes: string[];
 }
 
-export default function MFASetup({ userId }: MFASetupProps) {
+export default function MFASetup() {
   const [mfaStatus, setMfaStatus] = useState<MFAStatus | null>(null);
   const [setupData, setSetupData] = useState<SetupData | null>(null);
   const [verificationCode, setVerificationCode] = useState('');

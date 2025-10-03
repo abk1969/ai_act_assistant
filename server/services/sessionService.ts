@@ -194,7 +194,11 @@ export class SessionService {
       if (activeSessions.length > maxSessions) {
         // Revoke oldest sessions
         const sessionsToRevoke = activeSessions
-          .sort((a, b) => a.lastActivityAt.getTime() - b.lastActivityAt.getTime())
+          .sort((a, b) => {
+            const aTime = a.lastActivityAt?.getTime() ?? 0;
+            const bTime = b.lastActivityAt?.getTime() ?? 0;
+            return aTime - bTime;
+          })
           .slice(0, activeSessions.length - maxSessions);
         
         for (const session of sessionsToRevoke) {

@@ -84,7 +84,7 @@ export class SecurityService implements ISecurityService {
     try {
       const settings = await storage.getSecuritySettings();
       this.serviceLogger.operation('getSecuritySettings', true, Date.now() - startTime);
-      return settings;
+      return settings ?? null;
     } catch (error) {
       this.serviceLogger.operation('getSecuritySettings', false, Date.now() - startTime);
       this.serviceLogger.error('Failed to get security settings', error as Error);
@@ -169,7 +169,8 @@ export class SecurityService implements ISecurityService {
       }
 
       const now = new Date();
-      const lockoutWindow = new Date(now.getTime() - securitySettings.lockoutDurationMinutes * 60 * 1000);
+      const lockoutDurationMinutes = securitySettings.lockoutDurationMinutes ?? 30;
+      const lockoutWindow = new Date(now.getTime() - lockoutDurationMinutes * 60 * 1000);
 
       // Check failed attempts by user
       const userFailedAttempts = await storage.getFailedLoginAttempts({
@@ -185,11 +186,13 @@ export class SecurityService implements ISecurityService {
 
       const userAttempts = userFailedAttempts.length;
       const ipAttempts = ipFailedAttempts.length;
+      const maxLoginAttempts = securitySettings.maxLoginAttempts ?? 5;
 
       // Check if locked by user attempts
-      if (userAttempts >= securitySettings.maxLoginAttempts) {
+      if (userAttempts >= maxLoginAttempts) {
         const latestAttempt = userFailedAttempts[0];
-        const unlockTime = new Date(latestAttempt.createdAt.getTime() + securitySettings.lockoutDurationMinutes * 60 * 1000);
+        const attemptTime = latestAttempt.createdAt || new Date();
+        const unlockTime = new Date(attemptTime.getTime() + lockoutDurationMinutes * 60 * 1000);
 
         if (now < unlockTime) {
           const remainingMinutes = Math.ceil((unlockTime.getTime() - now.getTime()) / (60 * 1000));
@@ -209,9 +212,10 @@ export class SecurityService implements ISecurityService {
       }
 
       // Check if locked by IP attempts (more aggressive threshold)
-      if (ipAttempts >= securitySettings.maxLoginAttempts * 2) {
+      if (ipAttempts >= maxLoginAttempts * 2) {
         const latestAttempt = ipFailedAttempts[0];
-        const unlockTime = new Date(latestAttempt.createdAt.getTime() + securitySettings.lockoutDurationMinutes * 60 * 1000);
+        const attemptTime = latestAttempt.createdAt || new Date();
+        const unlockTime = new Date(attemptTime.getTime() + lockoutDurationMinutes * 60 * 1000);
 
         if (now < unlockTime) {
           const remainingMinutes = Math.ceil((unlockTime.getTime() - now.getTime()) / (60 * 1000));
@@ -306,13 +310,14 @@ export class SecurityService implements ISecurityService {
         since: oneHourAgo,
       });
 
-      const requiresCaptcha = ipFailedAttempts.length >= securitySettings.captchaAfterAttempts;
+      const captchaAfterAttempts = securitySettings.captchaAfterAttempts ?? 3;
+      const requiresCaptcha = ipFailedAttempts.length >= captchaAfterAttempts;
 
       if (requiresCaptcha) {
         this.serviceLogger.info('CAPTCHA required due to failed attempts', {
           ipAddress,
           failedAttempts: ipFailedAttempts.length,
-          threshold: securitySettings.captchaAfterAttempts
+          threshold: captchaAfterAttempts
         });
       }
 
@@ -476,7 +481,7 @@ export class SecurityService implements ISecurityService {
       // Log successful authentication
       await auditService.logSecurityEvent({
         userId: user.id,
-        eventType: 'login_successful',
+        eventType: 'login_success',
         eventDescription: 'User successfully authenticated',
         ipAddress,
         userAgent,

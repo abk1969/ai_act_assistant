@@ -68,17 +68,25 @@ export class AuthController {
         });
       }
 
+      // Ensure user exists
+      if (!result.user) {
+        return res.status(500).json({
+          message: 'Authentication error',
+          code: 'USER_NOT_FOUND'
+        });
+      }
+
       // Regenerate session to prevent session fixation attacks
       req.session.regenerate((regenerateErr) => {
         if (regenerateErr) {
           logger.error('Session regeneration error', regenerateErr);
-          return res.status(500).json({ 
+          return res.status(500).json({
             message: 'Session error',
             code: 'SESSION_ERROR'
           });
         }
-        
-        req.logIn(result.user, (err) => {
+
+        req.logIn(result.user!, (err) => {
           if (err) {
             logger.error('Session login error', err);
             return res.status(500).json({ 
@@ -234,8 +242,8 @@ export class AuthController {
     try {
       // Revoke session in our security system
       if (sessionToken) {
-        const sessionService = (await import('../services/sessionService')).SessionService.getInstance();
-        await sessionService.revokeSession(sessionToken, 'User logout');
+        const { SessionService } = await import('../services/sessionService');
+        await SessionService.revokeSession(sessionToken, 'User logout');
       }
 
       // Log security event
@@ -358,10 +366,17 @@ export class AuthController {
         userAgent
       });
 
-      const result = await passwordService.generateResetToken(
-        email,
-        { ipAddress, userAgent }
-      );
+      // Find user by email
+      const { storage } = await import('../storage');
+      const user = await storage.getUserByEmail(email);
+
+      if (user) {
+        await passwordService.generateResetToken(
+          user.id,
+          ipAddress,
+          userAgent
+        );
+      }
 
       // Always return success to prevent email enumeration
       logger.info('Password reset request processed', {
@@ -370,7 +385,7 @@ export class AuthController {
         duration: Date.now() - startTime
       });
 
-      res.json({ 
+      res.json({
         message: 'If the email exists, a reset link has been sent.',
         code: 'RESET_REQUEST_SENT'
       });

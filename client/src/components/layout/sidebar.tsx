@@ -6,6 +6,7 @@ import {
   ClipboardCheck,
   TrendingUp,
   Database,
+  BookOpen,
   Shield,
   FileText,
   Award,
@@ -39,8 +40,8 @@ const navigationItems = [
   },
   {
     name: "Base réglementaire",
-    href: "/database",
-    icon: Database,
+    href: "/regulatory-database",
+    icon: BookOpen,
   },
   {
     name: "Conformité",

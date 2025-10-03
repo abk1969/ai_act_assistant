@@ -6,15 +6,35 @@ import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
-import { 
-  Newspaper, 
-  AlertTriangle, 
-  RefreshCw, 
-  Bookmark, 
+import {
+  Newspaper,
+  AlertTriangle,
+  RefreshCw,
+  Bookmark,
   ExternalLink,
   Clock,
   CheckCircle
 } from "lucide-react";
+
+interface RegulatoryUpdate {
+  id: string;
+  title: string;
+  description: string;
+  content: string;
+  source: string;
+  severity: string;
+  publishedDate: string;
+  publishedAt: string;
+  url: string;
+  category?: string;
+  bookmarked?: boolean;
+}
+
+interface RegulatoryStatus {
+  totalUpdates: number;
+  criticalAlerts: number;
+  lastSync: string;
+}
 
 export default function Monitoring() {
   const [selectedSource, setSelectedSource] = useState("all");
@@ -22,11 +42,11 @@ export default function Monitoring() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
-  const { data: updates, isLoading } = useQuery({
+  const { data: updates, isLoading } = useQuery<RegulatoryUpdate[]>({
     queryKey: ['/api/regulatory/updates', { source: selectedSource, severity: selectedSeverity }],
   });
 
-  const { data: status } = useQuery({
+  const { data: status } = useQuery<RegulatoryStatus>({
     queryKey: ['/api/regulatory/status'],
   });
 

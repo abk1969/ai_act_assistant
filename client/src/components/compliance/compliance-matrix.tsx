@@ -3,8 +3,15 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { CheckCircle, XCircle, Clock, Minus } from "lucide-react";
 
+interface ComplianceMatrixItem {
+  systemName: string;
+  riskLevel: string;
+  overallStatus: string;
+  requirements: any[];
+}
+
 export default function ComplianceMatrix() {
-  const { data: matrix, isLoading } = useQuery({
+  const { data: matrix, isLoading } = useQuery<ComplianceMatrixItem[]>({
     queryKey: ['/api/compliance/matrix'],
   });
 

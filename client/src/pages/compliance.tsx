@@ -4,8 +4,15 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Ban, AlertTriangle, CheckCircle } from "lucide-react";
 import ComplianceMatrix from "@/components/compliance/compliance-matrix";
 
+interface ComplianceOverview {
+  totalSystems: number;
+  compliantSystems: number;
+  partialCompliance: number;
+  nonCompliantSystems: number;
+}
+
 export default function Compliance() {
-  const { data: overview, isLoading: overviewLoading } = useQuery({
+  const { data: overview, isLoading: overviewLoading } = useQuery<ComplianceOverview>({
     queryKey: ['/api/compliance/overview'],
   });
 

@@ -5,14 +5,44 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Search, Ban, AlertTriangle, Eye, Calendar, Book } from "lucide-react";
+import {
+  Search, Ban, AlertTriangle, Eye, Calendar, Book, FileText, Shield, Users,
+  CheckCircle2, XCircle, Lightbulb, Scale, TrendingUp
+} from "lucide-react";
+import {
+  Accordion,
+  AccordionContent,
+  AccordionItem,
+  AccordionTrigger,
+} from "@/components/ui/accordion";
 
 export default function Database() {
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedCategory, setSelectedCategory] = useState("all");
 
-  const { data: articles, isLoading } = useQuery({
-    queryKey: ['/api/ai-act/articles', { search: searchQuery, category: selectedCategory }],
+  // Build query URL properly
+  const buildQueryUrl = () => {
+    const params = new URLSearchParams();
+    if (searchQuery && searchQuery.trim()) {
+      params.append('search', searchQuery.trim());
+    }
+    if (selectedCategory && selectedCategory !== 'all') {
+      params.append('category', selectedCategory);
+    }
+    const queryString = params.toString();
+    return `/api/ai-act/articles${queryString ? `?${queryString}` : ''}`;
+  };
+
+  const { data: articles, isLoading, refetch } = useQuery({
+    queryKey: ['/api/ai-act/articles', searchQuery, selectedCategory],
+    queryFn: async () => {
+      const url = buildQueryUrl();
+      const response = await fetch(url);
+      if (!response.ok) {
+        throw new Error('Failed to fetch articles');
+      }
+      return response.json();
+    },
     enabled: true,
   });
 
@@ -25,7 +55,8 @@ export default function Database() {
       bgColor: "bg-red-50",
       articles: "8 articles",
       lastUpdate: "12/07/2024",
-      riskLevel: "unacceptable"
+      riskLevel: "unacceptable",
+      category: "prohibited"
     },
     {
       title: "Haut risque",
@@ -35,7 +66,8 @@ export default function Database() {
       bgColor: "bg-orange-50",
       articles: "24 articles",
       lastUpdate: "Annexe III mise à jour",
-      riskLevel: "high"
+      riskLevel: "high",
+      category: "high_risk"
     },
     {
       title: "Transparence",
@@ -45,7 +77,41 @@ export default function Database() {
       bgColor: "bg-blue-50",
       articles: "6 articles",
       lastUpdate: "Modèles génératifs",
-      riskLevel: "limited"
+      riskLevel: "limited",
+      category: "transparency"
+    },
+    {
+      title: "Gouvernance",
+      description: "Chapitres V-VII - Cadre institutionnel",
+      icon: Shield,
+      iconColor: "text-indigo-600",
+      bgColor: "bg-indigo-50",
+      articles: "15 articles",
+      lastUpdate: "Comité européen IA",
+      riskLevel: "governance",
+      category: "governance"
+    },
+    {
+      title: "Documentation",
+      description: "Articles 11-13 - Exigences techniques",
+      icon: FileText,
+      iconColor: "text-green-600",
+      bgColor: "bg-green-50",
+      articles: "12 articles",
+      lastUpdate: "Templates conformité",
+      riskLevel: "documentation",
+      category: "documentation"
+    },
+    {
+      title: "Droits fondamentaux",
+      description: "Article 27 - Évaluation d'impact",
+      icon: Users,
+      iconColor: "text-purple-600",
+      bgColor: "bg-purple-50",
+      articles: "7 articles",
+      lastUpdate: "Guides pratiques",
+      riskLevel: "rights",
+      category: "fundamental_rights"
     }
   ];
 
@@ -65,7 +131,12 @@ export default function Database() {
   };
 
   const handleSearch = () => {
-    // Search is handled automatically by the query when searchQuery changes
+    refetch();
+  };
+
+  const handleQuickAccess = (category: string) => {
+    setSelectedCategory(category);
+    setSearchQuery("");
   };
 
   return (
@@ -117,14 +188,15 @@ export default function Database() {
       </Card>
 
       {/* Quick Access Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-8">
         {quickAccessCards.map((card, index) => {
           const Icon = card.icon;
           return (
-            <Card 
-              key={index} 
+            <Card
+              key={index}
               className="hover:shadow-lg transition-shadow cursor-pointer"
               data-testid={`quick-access-${index}`}
+              onClick={() => handleQuickAccess(card.category)}
             >
               <CardContent className="p-6">
                 <div className="flex items-center gap-3 mb-3">
@@ -160,47 +232,128 @@ export default function Database() {
               ))}
             </div>
           ) : articles && articles.length > 0 ? (
-            <div className="divide-y divide-border">
+            <Accordion type="single" collapsible className="w-full">
               {articles.map((article: any, index: number) => (
-                <div 
-                  key={article.id} 
-                  className="p-6 hover:bg-muted/30 cursor-pointer"
+                <AccordionItem
+                  key={article.id}
+                  value={`article-${index}`}
                   data-testid={`article-${index}`}
                 >
-                  <div className="flex items-start justify-between mb-3">
-                    <div>
-                      <h4 className="font-medium text-foreground">
-                        {article.articleNumber} - {article.title}
-                      </h4>
-                      {article.riskCategory && (
-                        <Badge className={getRiskBadgeColor(article.riskCategory)}>
-                          {article.riskCategory === 'unacceptable' && 'Risque inacceptable'}
-                          {article.riskCategory === 'high' && 'Haut risque'}
-                          {article.riskCategory === 'limited' && 'Risque limité'}
-                          {article.riskCategory === 'minimal' && 'Risque minimal'}
-                        </Badge>
-                      )}
+                  <AccordionTrigger className="hover:no-underline">
+                    <div className="flex items-start justify-between w-full pr-4">
+                      <div className="text-left">
+                        <h4 className="font-medium text-foreground mb-1">
+                          {article.articleNumber} - {article.title}
+                        </h4>
+                        <div className="flex items-center gap-2 flex-wrap">
+                          {article.riskCategory && (
+                            <Badge className={getRiskBadgeColor(article.riskCategory)}>
+                              {article.riskCategory === 'unacceptable' && 'Risque inacceptable'}
+                              {article.riskCategory === 'high' && 'Haut risque'}
+                              {article.riskCategory === 'limited' && 'Risque limité'}
+                              {article.riskCategory === 'minimal' && 'Risque minimal'}
+                            </Badge>
+                          )}
+                          <Badge variant="outline">{article.chapter}</Badge>
+                        </div>
+                      </div>
                     </div>
-                    <Badge variant="outline">{article.chapter}</Badge>
-                  </div>
-                  <p className="text-sm text-muted-foreground line-clamp-3 mb-3">
-                    {article.content}
-                  </p>
-                  <div className="flex items-center gap-4">
-                    {article.effectiveDate && (
-                      <span className="text-xs text-muted-foreground flex items-center gap-1">
-                        <Calendar className="h-3 w-3" />
-                        Entrée en vigueur: {new Date(article.effectiveDate).toLocaleDateString('fr-FR')}
-                      </span>
-                    )}
-                    <span className="text-xs text-muted-foreground flex items-center gap-1">
-                      <Book className="h-3 w-3" />
-                      Dernière mise à jour: {new Date(article.lastUpdated).toLocaleDateString('fr-FR')}
-                    </span>
-                  </div>
-                </div>
+                  </AccordionTrigger>
+                  <AccordionContent>
+                    <div className="space-y-4 pt-2">
+                      {/* Article Content */}
+                      <div>
+                        <h5 className="font-semibold text-sm mb-2 flex items-center gap-2">
+                          <FileText className="h-4 w-4" />
+                          Texte officiel
+                        </h5>
+                        <p className="text-sm text-muted-foreground leading-relaxed">
+                          {article.content}
+                        </p>
+                      </div>
+
+                      {/* Practical Examples */}
+                      {article.practicalExamples && article.practicalExamples.length > 0 && (
+                        <div>
+                          <h5 className="font-semibold text-sm mb-2 flex items-center gap-2">
+                            <Lightbulb className="h-4 w-4 text-yellow-600" />
+                            Exemples pratiques
+                          </h5>
+                          <ul className="space-y-1">
+                            {article.practicalExamples.map((example: string, i: number) => (
+                              <li key={i} className="text-sm text-muted-foreground">
+                                {example}
+                              </li>
+                            ))}
+                          </ul>
+                        </div>
+                      )}
+
+                      {/* Compliance Checklist */}
+                      {article.complianceChecklist && article.complianceChecklist.length > 0 && (
+                        <div>
+                          <h5 className="font-semibold text-sm mb-2 flex items-center gap-2">
+                            <CheckCircle2 className="h-4 w-4 text-green-600" />
+                            Checklist de conformité
+                          </h5>
+                          <ul className="space-y-1">
+                            {article.complianceChecklist.map((item: string, i: number) => (
+                              <li key={i} className="text-sm text-muted-foreground font-mono">
+                                {item}
+                              </li>
+                            ))}
+                          </ul>
+                        </div>
+                      )}
+
+                      {/* Sanctions */}
+                      {article.sanctions && (
+                        <div className="bg-red-50 dark:bg-red-950/20 p-3 rounded-lg">
+                          <h5 className="font-semibold text-sm mb-2 flex items-center gap-2 text-red-700 dark:text-red-400">
+                            <Scale className="h-4 w-4" />
+                            Sanctions applicables
+                          </h5>
+                          <p className="text-sm text-red-600 dark:text-red-300">
+                            {article.sanctions}
+                          </p>
+                        </div>
+                      )}
+
+                      {/* Related Articles */}
+                      {article.relatedArticles && article.relatedArticles.length > 0 && (
+                        <div>
+                          <h5 className="font-semibold text-sm mb-2 flex items-center gap-2">
+                            <TrendingUp className="h-4 w-4 text-blue-600" />
+                            Articles connexes
+                          </h5>
+                          <div className="flex flex-wrap gap-2">
+                            {article.relatedArticles.map((related: string, i: number) => (
+                              <Badge key={i} variant="secondary">
+                                {related}
+                              </Badge>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Metadata */}
+                      <div className="flex items-center gap-4 pt-2 border-t">
+                        {article.effectiveDate && (
+                          <span className="text-xs text-muted-foreground flex items-center gap-1">
+                            <Calendar className="h-3 w-3" />
+                            Entrée en vigueur: {new Date(article.effectiveDate).toLocaleDateString('fr-FR')}
+                          </span>
+                        )}
+                        <span className="text-xs text-muted-foreground flex items-center gap-1">
+                          <Book className="h-3 w-3" />
+                          Dernière mise à jour: {new Date(article.lastUpdated).toLocaleDateString('fr-FR')}
+                        </span>
+                      </div>
+                    </div>
+                  </AccordionContent>
+                </AccordionItem>
               ))}
-            </div>
+            </Accordion>
           ) : (
             <div className="text-center py-8">
               <p className="text-muted-foreground">

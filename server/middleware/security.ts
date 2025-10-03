@@ -164,7 +164,7 @@ export const requireMFA = async (req: Request, res: Response, next: NextFunction
     }
 
     const { userId } = req.securityContext;
-    const mfaService = (await import('../services/mfaService')).MFAService.getInstance();
+    const { mfaService } = await import('../services/mfaService');
     const mfaStatus = await mfaService.getMfaStatus(userId);
 
     if (!mfaStatus.enabled) {

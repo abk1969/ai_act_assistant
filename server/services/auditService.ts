@@ -32,7 +32,7 @@ export class AuditService {
       await storage.createUserSecurityEvent(auditEvent);
 
       // Check for suspicious activity patterns
-      if (riskScore >= 70) {
+      if (riskScore >= 70 && event.ipAddress) {
         await this.checkSuspiciousActivity(event.userId, event.ipAddress);
       }
     } catch (error) {
@@ -95,7 +95,7 @@ export class AuditService {
    * @param userId - User ID (can be null)
    * @param ipAddress - IP address (can be null)
    */
-  private static async checkSuspiciousActivity(userId?: string, ipAddress?: string): Promise<void> {
+  private static async checkSuspiciousActivity(userId?: string | null, ipAddress?: string | null): Promise<void> {
     try {
       const now = new Date();
       const oneHourAgo = new Date(now.getTime() - 60 * 60 * 1000);
@@ -293,7 +293,7 @@ export class AuditService {
     
     events.forEach(event => {
       const row = [
-        event.createdAt.toISOString(),
+        event.createdAt ? event.createdAt.toISOString() : '',
         event.userId || '',
         event.eventType,
         `"${(event.eventDescription || '').replace(/"/g, '""')}"`,

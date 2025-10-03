@@ -128,16 +128,16 @@ export class MFAController {
         });
       }
 
-      const { secret, verificationCode, backupCodes, recoveryEmail } = mfaSetupSchema.parse(req.body);
-      
+      const { totpSecret, verificationCode } = mfaSetupSchema.parse(req.body);
+
       logger.info('MFA enable requested', { userId });
 
-      await mfaService.enableMfa(userId, {
-        secret,
-        verificationCode,
-        backupCodes,
-        recoveryEmail
-      });
+      // Generate backup codes
+      const backupCodes: string[] = Array.from({ length: 10 }, () =>
+        Math.random().toString(36).substring(2, 10).toUpperCase()
+      );
+
+      await mfaService.enableMfa(userId, totpSecret, verificationCode, backupCodes);
 
       await auditService.logSecurityEvent({
         userId,
@@ -150,7 +150,6 @@ export class MFAController {
 
       logger.info('MFA enabled successfully', {
         userId,
-        hasRecoveryEmail: !!recoveryEmail,
         duration: Date.now() - startTime
       });
 
@@ -179,8 +178,9 @@ export class MFAController {
         });
       }
 
-      res.status(400).json({ 
-        message: error.message || 'Failed to enable MFA',
+      const errorMessage = error instanceof Error ? error.message : 'Failed to enable MFA';
+      res.status(400).json({
+        message: errorMessage,
         code: 'MFA_ENABLE_ERROR'
       });
     }
@@ -246,8 +246,9 @@ export class MFAController {
         });
       }
 
-      res.status(400).json({ 
-        message: error.message || 'Failed to disable MFA',
+      const errorMessage = error instanceof Error ? error.message : 'Failed to disable MFA';
+      res.status(400).json({
+        message: errorMessage,
         code: 'MFA_DISABLE_ERROR'
       });
     }
@@ -315,8 +316,9 @@ export class MFAController {
         });
       }
 
-      res.status(400).json({ 
-        message: error.message || 'Failed to regenerate backup codes',
+      const errorMessage = error instanceof Error ? error.message : 'Failed to regenerate backup codes';
+      res.status(400).json({
+        message: errorMessage,
         code: 'BACKUP_CODES_ERROR'
       });
     }

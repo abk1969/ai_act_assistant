@@ -275,12 +275,44 @@ export class DatabaseStorage implements IStorage {
     return article;
   }
 
+  async createAiActArticle(article: any): Promise<AiActArticle> {
+    // Check if article already exists
+    const existing = await db
+      .select()
+      .from(aiActArticles)
+      .where(eq(aiActArticles.articleNumber, article.articleNumber))
+      .limit(1);
+
+    if (existing.length > 0) {
+      // Update existing article
+      const [updated] = await db
+        .update(aiActArticles)
+        .set({
+          ...article,
+          lastUpdated: new Date()
+        })
+        .where(eq(aiActArticles.articleNumber, article.articleNumber))
+        .returning();
+      return updated;
+    } else {
+      // Create new article
+      const [created] = await db
+        .insert(aiActArticles)
+        .values({
+          ...article,
+          lastUpdated: new Date()
+        })
+        .returning();
+      return created;
+    }
+  }
+
   async searchAiActArticles(query: string): Promise<AiActArticle[]> {
     return await db
       .select()
       .from(aiActArticles)
       .where(
-        sql`${aiActArticles.title} ILIKE ${`%${query}%`} OR ${aiActArticles.content} ILIKE ${`%${query}%`}`
+        sql`${aiActArticles.title} ILIKE ${`%${query}%`} OR ${aiActArticles.content} ILIKE ${`%${query}%`} OR ${aiActArticles.articleNumber} ILIKE ${`%${query}%`}`
       )
       .orderBy(aiActArticles.articleNumber);
   }
@@ -570,34 +602,35 @@ export class DatabaseStorage implements IStorage {
     limit?: number;
     offset?: number;
   } = {}): Promise<UserSecurityEvent[]> {
-    let query = db
-      .select()
-      .from(userSecurityEvents)
-      .where(eq(userSecurityEvents.userId, userId));
+    const conditions: any[] = [eq(userSecurityEvents.userId, userId)];
 
     if (options.eventType) {
-      query = query.where(eq(userSecurityEvents.eventType, options.eventType as any));
+      conditions.push(eq(userSecurityEvents.eventType, options.eventType as any));
     }
 
     if (options.since) {
-      query = query.where(sql`${userSecurityEvents.createdAt} >= ${options.since}`);
+      conditions.push(sql`${userSecurityEvents.createdAt} >= ${options.since}`);
     }
 
     if (options.until) {
-      query = query.where(sql`${userSecurityEvents.createdAt} <= ${options.until}`);
+      conditions.push(sql`${userSecurityEvents.createdAt} <= ${options.until}`);
     }
 
-    query = query.orderBy(desc(userSecurityEvents.createdAt));
+    let query = db
+      .select()
+      .from(userSecurityEvents)
+      .where(and(...conditions))
+      .orderBy(desc(userSecurityEvents.createdAt));
 
     if (options.limit) {
-      query = query.limit(options.limit);
+      query = query.limit(options.limit) as any;
     }
 
     if (options.offset) {
-      query = query.offset(options.offset);
+      query = query.offset(options.offset) as any;
     }
 
-    return query;
+    return query as any;
   }
 
   async getSecurityEventsByIp(ipAddress: string, options: {
@@ -606,30 +639,31 @@ export class DatabaseStorage implements IStorage {
     limit?: number;
     offset?: number;
   } = {}): Promise<UserSecurityEvent[]> {
-    let query = db
-      .select()
-      .from(userSecurityEvents)
-      .where(eq(userSecurityEvents.ipAddress, ipAddress));
+    const conditions: any[] = [eq(userSecurityEvents.ipAddress, ipAddress)];
 
     if (options.since) {
-      query = query.where(sql`${userSecurityEvents.createdAt} >= ${options.since}`);
+      conditions.push(sql`${userSecurityEvents.createdAt} >= ${options.since}`);
     }
 
     if (options.until) {
-      query = query.where(sql`${userSecurityEvents.createdAt} <= ${options.until}`);
+      conditions.push(sql`${userSecurityEvents.createdAt} <= ${options.until}`);
     }
 
-    query = query.orderBy(desc(userSecurityEvents.createdAt));
+    let query = db
+      .select()
+      .from(userSecurityEvents)
+      .where(and(...conditions))
+      .orderBy(desc(userSecurityEvents.createdAt));
 
     if (options.limit) {
-      query = query.limit(options.limit);
+      query = query.limit(options.limit) as any;
     }
 
     if (options.offset) {
-      query = query.offset(options.offset);
+      query = query.offset(options.offset) as any;
     }
 
-    return query;
+    return query as any;
   }
 
   async getSecurityEventsSince(since: Date): Promise<UserSecurityEvent[]> {
@@ -667,10 +701,10 @@ export class DatabaseStorage implements IStorage {
     }
 
     if (conditions.length > 0) {
-      query = query.where(and(...conditions));
+      query = query.where(and(...conditions)) as any;
     }
 
-    return query.orderBy(desc(userSecurityEvents.createdAt));
+    return query.orderBy(desc(userSecurityEvents.createdAt)) as any;
   }
 
   async deleteSecurityEventsOlderThan(date: Date): Promise<void> {
@@ -724,40 +758,42 @@ export class DatabaseStorage implements IStorage {
     status?: 'active' | 'expired' | 'revoked';
     limit?: number;
   } = {}): Promise<UserSession[]> {
+    const conditions: any[] = [eq(userSessions.userId, userId)];
+
+    if (options.status) {
+      conditions.push(eq(userSessions.status, options.status));
+    }
+
     let query = db
       .select()
       .from(userSessions)
-      .where(eq(userSessions.userId, userId));
-
-    if (options.status) {
-      query = query.where(eq(userSessions.status, options.status));
-    }
-
-    query = query.orderBy(desc(userSessions.lastActivityAt));
+      .where(and(...conditions))
+      .orderBy(desc(userSessions.lastActivityAt));
 
     if (options.limit) {
-      query = query.limit(options.limit);
+      query = query.limit(options.limit) as any;
     }
 
-    return query;
+    return query as any;
   }
 
   async getUserSessionsByIp(userId: string, ipAddress: string, options: {
     since?: Date;
   } = {}): Promise<UserSession[]> {
-    let query = db
-      .select()
-      .from(userSessions)
-      .where(and(
-        eq(userSessions.userId, userId),
-        eq(userSessions.ipAddress, ipAddress)
-      ));
+    const conditions: any[] = [
+      eq(userSessions.userId, userId),
+      eq(userSessions.ipAddress, ipAddress)
+    ];
 
     if (options.since) {
-      query = query.where(sql`${userSessions.createdAt} >= ${options.since}`);
+      conditions.push(sql`${userSessions.createdAt} >= ${options.since}`);
     }
 
-    return query.orderBy(desc(userSessions.createdAt));
+    return db
+      .select()
+      .from(userSessions)
+      .where(and(...conditions))
+      .orderBy(desc(userSessions.createdAt)) as any;
   }
 
   async updateUserSessionActivity(sessionToken: string): Promise<void> {
@@ -816,10 +852,10 @@ export class DatabaseStorage implements IStorage {
     }
 
     if (conditions.length > 0) {
-      query = query.where(and(...conditions));
+      query = query.where(and(...conditions)) as any;
     }
 
-    return query.orderBy(desc(failedLoginAttempts.createdAt));
+    return query.orderBy(desc(failedLoginAttempts.createdAt)) as any;
   }
 
   async deleteFailedLoginAttemptsOlderThan(date: Date): Promise<void> {

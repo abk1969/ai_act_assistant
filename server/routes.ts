@@ -12,6 +12,8 @@ import { complianceService } from "./services/complianceService";
 import { regulatoryService } from "./services/regulatoryService";
 import { llmService } from "./services/llmService";
 import { maturityService } from "./services/maturityService";
+import { aiActIndexingService } from "./services/aiActIndexingService";
+import { regulatoryDatabaseService } from "./services/RegulatoryDatabaseService";
 import { storage } from "./storage";
 
 // Security architecture
@@ -68,7 +70,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
   }
 
   try {
-    console.log('🛡️ Initializing security settings...');
+    console.log('� Indexing AI Act articles database...');
+    const indexResult = await aiActIndexingService.reindexDatabase();
+    console.log(`✅ AI Act database indexed: ${indexResult.indexed} new, ${indexResult.updated} updated`);
+    if (indexResult.errors.length > 0) {
+      console.warn(`⚠️ Indexing errors: ${indexResult.errors.length}`);
+    }
+  } catch (error) {
+    console.error('⚠️ AI Act indexing failed:', error instanceof Error ? error.message : String(error));
+  }
+
+  try {
+    console.log('�🛡️ Initializing security settings...');
     await securityService.initializeSecuritySettings();
     console.log('✅ Security service initialized');
   } catch (error) {
@@ -312,15 +325,61 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const { id } = req.params;
       const article = await storage.getAiActArticle(id);
-      
+
       if (!article) {
         return res.status(404).json({ message: "Article not found" });
       }
-      
+
       res.json(article);
     } catch (error) {
       console.error("Error fetching AI Act article:", error);
       res.status(500).json({ message: "Failed to fetch article" });
+    }
+  });
+
+  // Advanced search endpoint
+  app.get('/api/ai-act/search', async (req, res) => {
+    try {
+      const { query, category, riskLevel, chapter, keywords } = req.query;
+
+      const articles = await aiActIndexingService.advancedSearch({
+        query: query as string,
+        category: category as string,
+        riskLevel: riskLevel as string,
+        chapter: chapter as string,
+        keywords: keywords ? (keywords as string).split(',') : undefined
+      });
+
+      res.json(articles);
+    } catch (error) {
+      console.error("Error performing advanced search:", error);
+      res.status(500).json({ message: "Failed to perform search" });
+    }
+  });
+
+  // Database statistics endpoint
+  app.get('/api/ai-act/statistics', async (req, res) => {
+    try {
+      const stats = await aiActIndexingService.getDatabaseStatistics();
+      res.json(stats);
+    } catch (error) {
+      console.error("Error fetching database statistics:", error);
+      res.status(500).json({ message: "Failed to fetch statistics" });
+    }
+  });
+
+  // Reindex database endpoint (admin only)
+  app.post('/api/ai-act/reindex', enhancedAuth, requireAdmin, async (req, res) => {
+    try {
+      const result = await aiActIndexingService.reindexDatabase();
+      res.json({
+        success: true,
+        message: `Reindexing complete: ${result.indexed} new, ${result.updated} updated`,
+        ...result
+      });
+    } catch (error) {
+      console.error("Error reindexing database:", error);
+      res.status(500).json({ message: "Failed to reindex database" });
     }
   });
 
@@ -923,27 +982,178 @@ Le registre doit contenir:
   });
 
 
-  app.patch('/api/certificates/:id/status', basicAuth, async (req: any, res) => {
+  app.patch('/api/certificates/:id/status', enhancedAuth, async (req: any, res) => {
     try {
       const userId = req.user.id;
       const { id } = req.params;
       const { status } = req.body;
-      
+
       if (!['valid', 'expired', 'revoked', 'pending'].includes(status)) {
         return res.status(400).json({ message: "Invalid status" });
       }
-      
+
       // Check certificate ownership
       const certificate = await storage.getCertificate(id);
       if (!certificate || certificate.userId !== userId) {
         return res.status(403).json({ message: "Access denied" });
       }
-      
+
       const updatedCertificate = await storage.updateCertificateStatus(id, status);
       res.json(updatedCertificate);
     } catch (error) {
       console.error("Error updating certificate status:", error);
       res.status(500).json({ message: "Failed to update certificate status" });
+    }
+  });
+
+  // ============================================
+  // REGULATORY DATABASE ROUTES - Professional AI Act Database
+  // ============================================
+
+  /**
+   * Search regulatory database with advanced filters
+   */
+  app.get('/api/regulatory-database/search', basicAuth, async (req: any, res) => {
+    try {
+      const filters = {
+        query: req.query.query as string | undefined,
+        riskCategory: req.query.riskCategory as any,
+        titleNumber: req.query.titleNumber as string | undefined,
+        chapterNumber: req.query.chapterNumber as string | undefined,
+        applicableTo: req.query.applicableTo ?
+          (Array.isArray(req.query.applicableTo) ? req.query.applicableTo : [req.query.applicableTo]) :
+          undefined,
+        keywords: req.query.keywords ?
+          (Array.isArray(req.query.keywords) ? req.query.keywords : [req.query.keywords]) :
+          undefined,
+      };
+
+      const results = await regulatoryDatabaseService.search(filters);
+      res.json(results);
+    } catch (error) {
+      console.error("Error searching regulatory database:", error);
+      res.status(500).json({ message: "Failed to search regulatory database" });
+    }
+  });
+
+  /**
+   * Get database statistics
+   */
+  app.get('/api/regulatory-database/stats', basicAuth, async (req: any, res) => {
+    try {
+      const stats = await regulatoryDatabaseService.getStatistics();
+      res.json(stats);
+    } catch (error) {
+      console.error("Error fetching database stats:", error);
+      res.status(500).json({ message: "Failed to fetch statistics" });
+    }
+  });
+
+  /**
+   * Get article by number
+   */
+  app.get('/api/regulatory-database/article/:articleNumber', basicAuth, async (req: any, res) => {
+    try {
+      const { articleNumber } = req.params;
+      const article = await regulatoryDatabaseService.getArticleByNumber(articleNumber);
+
+      if (!article) {
+        return res.status(404).json({ message: "Article not found" });
+      }
+
+      res.json(article);
+    } catch (error) {
+      console.error("Error fetching article:", error);
+      res.status(500).json({ message: "Failed to fetch article" });
+    }
+  });
+
+  /**
+   * Get related articles
+   */
+  app.get('/api/regulatory-database/article/:articleNumber/related', basicAuth, async (req: any, res) => {
+    try {
+      const { articleNumber } = req.params;
+      const relatedArticles = await regulatoryDatabaseService.getRelatedArticles(articleNumber);
+      res.json(relatedArticles);
+    } catch (error) {
+      console.error("Error fetching related articles:", error);
+      res.status(500).json({ message: "Failed to fetch related articles" });
+    }
+  });
+
+  /**
+   * Get articles by risk category
+   */
+  app.get('/api/regulatory-database/risk/:category', basicAuth, async (req: any, res) => {
+    try {
+      const { category } = req.params;
+
+      if (!['unacceptable', 'high', 'limited', 'minimal'].includes(category)) {
+        return res.status(400).json({ message: "Invalid risk category" });
+      }
+
+      const articles = await regulatoryDatabaseService.getArticlesByRiskCategory(category as any);
+      res.json(articles);
+    } catch (error) {
+      console.error("Error fetching articles by risk:", error);
+      res.status(500).json({ message: "Failed to fetch articles" });
+    }
+  });
+
+  /**
+   * Get articles by title
+   */
+  app.get('/api/regulatory-database/title/:titleNumber', basicAuth, async (req: any, res) => {
+    try {
+      const { titleNumber } = req.params;
+      const articles = await regulatoryDatabaseService.getArticlesByTitle(titleNumber);
+      res.json(articles);
+    } catch (error) {
+      console.error("Error fetching articles by title:", error);
+      res.status(500).json({ message: "Failed to fetch articles" });
+    }
+  });
+
+  /**
+   * Get navigation structure
+   */
+  app.get('/api/regulatory-database/structure', basicAuth, async (req: any, res) => {
+    try {
+      const structure = regulatoryDatabaseService.getStructure();
+      res.json(structure);
+    } catch (error) {
+      console.error("Error fetching structure:", error);
+      res.status(500).json({ message: "Failed to fetch structure" });
+    }
+  });
+
+  /**
+   * Export articles in various formats
+   */
+  app.post('/api/regulatory-database/export', basicAuth, async (req: any, res) => {
+    try {
+      const format = req.query.format as 'json' | 'csv' | 'markdown';
+
+      if (!['json', 'csv', 'markdown'].includes(format)) {
+        return res.status(400).json({ message: "Invalid export format" });
+      }
+
+      const filters = req.body;
+      const exportData = await regulatoryDatabaseService.exportArticles(format, filters);
+
+      const contentTypes = {
+        json: 'application/json',
+        csv: 'text/csv',
+        markdown: 'text/markdown'
+      };
+
+      res.setHeader('Content-Type', contentTypes[format]);
+      res.setHeader('Content-Disposition', `attachment; filename="ai-act-articles.${format}"`);
+      res.send(exportData);
+    } catch (error) {
+      console.error("Error exporting articles:", error);
+      res.status(500).json({ message: "Failed to export articles" });
     }
   });
 

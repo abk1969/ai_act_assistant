@@ -69,7 +69,7 @@ class ComplianceService {
         riskLevel: system.riskLevel || 'minimal',
         obligations,
         overallStatus,
-        lastUpdated: system.updatedAt || system.createdAt,
+        lastUpdated: system.updatedAt || system.createdAt || new Date(),
       });
     }
 
