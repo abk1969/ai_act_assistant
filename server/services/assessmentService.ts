@@ -498,19 +498,49 @@ class AssessmentService {
     formData: AssessmentFormData | RiskAssessmentFormData,
     userId: string
   ): Promise<LegacyRiskAssessmentResult | RiskAssessmentResult> {
-    // Check if this is Framework v3.0 format
-    if (this.isFrameworkV3Format(formData)) {
-      return await this.assessCombined(formData as RiskAssessmentFormData);
+    console.log('🔍 Starting risk assessment for user:', userId);
+    console.log('📊 Assessment data:', {
+      systemName: formData.systemName,
+      isFrameworkV3: this.isFrameworkV3Format(formData)
+    });
+
+    try {
+      // Check if this is Framework v3.0 format
+      if (this.isFrameworkV3Format(formData)) {
+        console.log('🆕 Using Framework v3.0 assessment');
+        return await this.assessCombined(formData as RiskAssessmentFormData);
+      }
+
+      // Legacy assessment for backward compatibility
+      console.log('🔄 Using legacy assessment');
+      return await this.performLegacyAssessment(formData as AssessmentFormData, userId);
+    } catch (error) {
+      console.error('❌ Risk assessment failed:', error);
+      throw error;
     }
-    
-    // Legacy assessment for backward compatibility
-    return await this.performLegacyAssessment(formData as AssessmentFormData, userId);
   }
 
   private isFrameworkV3Format(formData: any): boolean {
-    return formData.frameworkResponses !== undefined || 
-           formData.organizationName !== undefined ||
-           (formData.systemName !== undefined && formData.sector === undefined);
+    console.log('🔍 Checking format detection:', {
+      hasFrameworkResponses: formData.frameworkResponses !== undefined,
+      hasOrganizationName: formData.organizationName !== undefined,
+      hasIndustrySector: formData.industrySector !== undefined,
+      hasSector: formData.sector !== undefined,
+      hasResponses: formData.responses !== undefined
+    });
+
+    // Framework v3.0 format indicators:
+    // 1. Has frameworkResponses (explicit Framework v3.0)
+    // 2. Has organizationName (new field in Framework v3.0)
+    // 3. Has industrySector instead of sector (new format)
+    // 4. Has responses object (new question format)
+    const isV3 = formData.frameworkResponses !== undefined ||
+                 formData.organizationName !== undefined ||
+                 (formData.industrySector !== undefined && formData.sector === undefined) ||
+                 (formData.responses !== undefined && Object.keys(formData.responses).length > 0);
+
+    console.log('📋 Format detection result:', isV3 ? 'Framework v3.0' : 'Legacy');
+    return isV3;
   }
 
   private async performLegacyAssessment(
@@ -531,20 +561,30 @@ class AssessmentService {
     );
 
     // Generate AI-powered assessment with enhanced context
+    console.log('🧠 Preparing AI assessment with enhanced context');
     const enhancedContext = `
     EU AI Act Classification: ${euAiActClassification.riskLevel.toUpperCase()}
     EU AI Act Reasoning: ${euAiActClassification.reasoning}
     Framework Risk Score: ${frameworkRiskScore}/100
     Combined Risk Score: ${combinedRiskScore}/100
     `;
-    
-    const aiAssessment = await this.generateAIAssessment(
-      formData, 
-      combinedRiskScore, 
-      finalRiskLevel, 
-      userId,
-      enhancedContext
-    );
+
+    let aiAssessment;
+    try {
+      console.log('🤖 Generating AI assessment (this may take up to 90 seconds)...');
+      aiAssessment = await this.generateAIAssessment(
+        formData,
+        combinedRiskScore,
+        finalRiskLevel,
+        userId,
+        enhancedContext
+      );
+      console.log('✅ AI assessment completed successfully');
+    } catch (error) {
+      console.error('❌ AI assessment failed, using fallback:', error);
+      // Fallback assessment if LLM fails
+      aiAssessment = this.getFallbackAssessment(finalRiskLevel, formData);
+    }
 
     // Determine obligations based on EU AI Act classification
     const obligations = this.getEUAiActObligations(euAiActClassification);
@@ -772,10 +812,13 @@ class AssessmentService {
 
     let response = null;
     try {
+      console.log('🤖 Calling LLM for assessment reasoning...');
       response = await llmService.generateResponse(prompt, userId, {
         systemPrompt,
-        maxTokens: 2000
+        maxTokens: 2000,
+        timeout: 90000 // 90 seconds timeout for assessment reasoning
       });
+      console.log('✅ LLM response received successfully');
 
       console.log('LLM response content:', response.content); // Debug log
       
@@ -1375,49 +1418,64 @@ class AssessmentService {
 
   // Enhanced assessment combining EU AI Act + Framework v3.0
   async assessCombined(formData: RiskAssessmentFormData): Promise<RiskAssessmentResult> {
-    // 1. EU AI Act Classification (Tier 1)
-    const euAiActClassification = this.classifyEUAIAct(this.adaptFromFrameworkV3(formData));
-    
-    // 2. Framework v3.0 Assessment (Tier 2)
-    const frameworkData: FrameworkAssessmentData = {
-      systemName: formData.systemName,
-      organizationName: formData.organizationName,
-      industrySector: formData.industrySector,
-      primaryUseCase: formData.primaryUseCase,
-      systemDescription: formData.systemDescription,
-      responses: this.transformFlatResponsesToNestedStructure(formData.frameworkResponses || {})
-    };
-    
-    const frameworkResult = await this.assessFrameworkV3(frameworkData);
-    
-    // 3. Combine results
-    const riskScore = this.calculateCombinedRiskScore(euAiActClassification.riskLevel, frameworkResult.overallScore);
-    const riskLevel = this.determineFinalRiskLevel(euAiActClassification.riskLevel, frameworkResult.customerRisk);
-    
-    // 4. Generate combined reasoning
-    const reasoning = await this.generateCombinedReasoning(euAiActClassification, frameworkResult);
-    
-    return {
-      euAiActRiskLevel: euAiActClassification.riskLevel,
-      euAiActClassification: {
-        reasoning: euAiActClassification.reasoning,
-        applicableArticles: euAiActClassification.applicableArticles,
-        isHighRiskDomain: euAiActClassification.isHighRiskDomain,
-        highRiskDomains: euAiActClassification.highRiskDomains
-      },
-      dimensionScores: this.transformDimensionResults(frameworkResult.dimensionResults),
-      overallFrameworkScore: frameworkResult.overallScore,
-      riskLevel,
-      riskScore,
-      reasoning,
-      applicableObligations: this.getObligations(euAiActClassification.riskLevel, formData),
-      complianceGaps: this.identifyComplianceGaps(euAiActClassification, frameworkResult),
-      complianceScore: this.calculateComplianceScore(euAiActClassification, frameworkResult),
-      recommendations: [...frameworkResult.recommendations],
-      actionPlan: this.generateCombinedActionPlan(euAiActClassification, frameworkResult),
-      priorityActions: frameworkResult.priorityActions.map(action => action.action),
-      assessmentVersion: '3.0'
-    };
+    console.log('🔄 Starting combined assessment (EU AI Act + Framework v3.0)');
+
+    try {
+      // 1. EU AI Act Classification (Tier 1)
+      console.log('📋 Step 1: EU AI Act Classification');
+      const euAiActClassification = this.classifyEUAIAct(this.adaptFromFrameworkV3(formData));
+      console.log('✅ EU AI Act classification completed:', euAiActClassification.riskLevel);
+
+      // 2. Framework v3.0 Assessment (Tier 2)
+      console.log('📊 Step 2: Framework v3.0 Assessment');
+      const frameworkData: FrameworkAssessmentData = {
+        systemName: formData.systemName,
+        organizationName: formData.organizationName,
+        industrySector: formData.industrySector,
+        primaryUseCase: formData.primaryUseCase,
+        systemDescription: formData.systemDescription,
+        responses: this.transformFlatResponsesToNestedStructure(formData.frameworkResponses || {})
+      };
+
+      const frameworkResult = await this.assessFrameworkV3(frameworkData);
+      console.log('✅ Framework v3.0 assessment completed, score:', frameworkResult.overallScore);
+
+      // 3. Combine results
+      console.log('🔗 Step 3: Combining results');
+      const riskScore = this.calculateCombinedRiskScore(euAiActClassification.riskLevel, frameworkResult.overallScore);
+      const riskLevel = this.determineFinalRiskLevel(euAiActClassification.riskLevel, frameworkResult.customerRisk);
+      console.log('✅ Combined risk level:', riskLevel, 'score:', riskScore);
+
+      // 4. Generate combined reasoning
+      console.log('💭 Step 4: Generating reasoning (LLM call)');
+      const reasoning = await this.generateCombinedReasoning(euAiActClassification, frameworkResult);
+      console.log('✅ Reasoning generated successfully');
+
+      return {
+        euAiActRiskLevel: euAiActClassification.riskLevel,
+        euAiActClassification: {
+          reasoning: euAiActClassification.reasoning,
+          applicableArticles: euAiActClassification.applicableArticles,
+          isHighRiskDomain: euAiActClassification.isHighRiskDomain,
+          highRiskDomains: euAiActClassification.highRiskDomains
+        },
+        dimensionScores: this.transformDimensionResults(frameworkResult.dimensionResults),
+        overallFrameworkScore: frameworkResult.overallScore,
+        riskLevel,
+        riskScore,
+        reasoning,
+        applicableObligations: this.getObligations(euAiActClassification.riskLevel, formData),
+        complianceGaps: this.identifyComplianceGaps(euAiActClassification, frameworkResult),
+        complianceScore: this.calculateComplianceScore(euAiActClassification, frameworkResult),
+        recommendations: [...frameworkResult.recommendations],
+        actionPlan: this.generateCombinedActionPlan(euAiActClassification, frameworkResult),
+        priorityActions: frameworkResult.priorityActions.map(action => action.action),
+        assessmentVersion: '3.0'
+      };
+    } catch (error) {
+      console.error('❌ Error in combined assessment:', error);
+      throw error;
+    }
   }
 
   private convertToLegacyFormat(formData: RiskAssessmentFormData): AssessmentFormData {
