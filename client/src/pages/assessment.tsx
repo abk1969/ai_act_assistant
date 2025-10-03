@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -306,6 +306,13 @@ interface AssessmentResult {
 }
 
 export default function Assessment() {
+  console.log('🔄 Assessment component rendering');
+
+  // Ref to track if submission is in progress (more reliable than state)
+  const isSubmittingRef = useRef(false);
+  // Ref to track last step change time
+  const lastStepChangeRef = useRef<number>(0);
+
   const [assessmentResult, setAssessmentResult] = useState<AssessmentResult | null>(null);
   const [isFormCompleted, setIsFormCompleted] = useState(false);
   const [currentStep, setCurrentStep] = useState(0);
@@ -320,6 +327,14 @@ export default function Assessment() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const { user } = useAuth();
+
+  console.log('📊 Current state:', {
+    isFormCompleted,
+    currentStep,
+    formDataKeys: Object.keys(formData),
+    responsesCount: Object.keys(formData.responses).length,
+    isSubmitting: isSubmittingRef.current
+  });
 
   // Calculate real-time risk assessment
   useEffect(() => {
@@ -344,34 +359,149 @@ export default function Assessment() {
   }, [formData.responses]);
 
   const assessmentMutation = useMutation({
+    retry: false, // Disable automatic retries
     mutationFn: async (data: AssessmentFormData) => {
-      const response = await apiRequest('POST', '/api/assessments', data);
-      return response.json();
+      // Double check with ref
+      if (isSubmittingRef.current) {
+        console.warn('⚠️ Submission already in progress (ref check), aborting');
+        throw new Error('Submission already in progress');
+      }
+
+      isSubmittingRef.current = true;
+      console.log('🚀 Starting assessment for system:', data.systemName);
+      console.log('📍 Stack trace:', new Error().stack);
+
+      try {
+        // Create a timeout promise
+        const timeoutPromise = new Promise((_, reject) => {
+          setTimeout(() => {
+            reject(new Error('Assessment timeout after 2 minutes'));
+          }, 120000); // 2 minutes timeout
+        });
+
+        // Create the API request promise with error handling
+        const apiPromise = (async () => {
+          try {
+            const response = await apiRequest('POST', '/api/assessments', data);
+            const result = await response.json();
+            console.log('📦 Received assessment result:', result);
+            return result;
+          } catch (err) {
+            console.error('🔴 API request error:', err);
+            // Re-throw with more context
+            if (err instanceof Error) {
+              throw new Error(`API Error: ${err.message}`);
+            }
+            throw err;
+          }
+        })();
+
+        // Race between timeout and API call
+        const result = await Promise.race([apiPromise, timeoutPromise]);
+        return result;
+      } catch (error) {
+        console.error('🔴 Assessment mutation error:', error);
+        isSubmittingRef.current = false; // Reset on error
+        throw error;
+      }
     },
     onSuccess: (data: AssessmentResult) => {
+      console.log('✅ Assessment completed successfully:', data);
+      isSubmittingRef.current = false; // Reset on success
       setAssessmentResult(data);
       setIsFormCompleted(true);
       queryClient.invalidateQueries({ queryKey: ['/api/ai-systems'] });
       queryClient.invalidateQueries({ queryKey: ['/api/dashboard/metrics'] });
-      
+
       toast({
         title: "Évaluation terminée",
         description: `Système classé comme risque ${data.riskLevel}`,
       });
     },
-    onError: (error) => {
-      console.error('Assessment error:', error);
+    onError: (error: any) => {
+      console.error('❌ Assessment error:', error);
+      console.error('Error type:', error?.constructor?.name);
+      console.error('Error message:', error?.message);
+      console.error('Error stack:', error?.stack);
+
+      isSubmittingRef.current = false; // Reset on error
+
+      let errorMessage = "Impossible de traiter l'évaluation. Veuillez réessayer.";
+      let errorTitle = "Erreur d'évaluation";
+
+      // Handle specific error types
+      const errorMsg = error?.message || String(error);
+
+      if (errorMsg.includes('timeout')) {
+        errorMessage = "L'évaluation a pris trop de temps. Veuillez réessayer avec des données plus simples.";
+        errorTitle = "Timeout d'évaluation";
+      } else if (errorMsg.includes('401') || errorMsg.includes('Unauthorized')) {
+        errorMessage = "Session expirée. Veuillez vous reconnecter.";
+        errorTitle = "Session expirée";
+      } else if (errorMsg.includes('408')) {
+        errorMessage = "Le serveur a mis trop de temps à répondre. Veuillez réessayer.";
+        errorTitle = "Timeout serveur";
+      } else if (errorMsg.includes('500') || errorMsg.includes('Internal Server Error')) {
+        errorMessage = "Erreur serveur. Veuillez réessayer dans quelques instants.";
+        errorTitle = "Erreur serveur";
+      } else if (errorMsg.includes('message channel closed') || errorMsg.includes('channel closed')) {
+        errorMessage = "Connexion interrompue. Veuillez désactiver les extensions de navigateur et réessayer.";
+        errorTitle = "Connexion interrompue";
+      } else if (errorMsg.includes('Network') || errorMsg.includes('Failed to fetch')) {
+        errorMessage = "Erreur de connexion. Vérifiez votre connexion internet.";
+        errorTitle = "Erreur réseau";
+      }
+
       toast({
-        title: "Erreur d'évaluation",
-        description: "Impossible de traiter l'évaluation. Veuillez réessayer.",
+        title: errorTitle,
+        description: errorMessage,
         variant: "destructive",
       });
     }
   });
 
-  const handleFormSubmit = () => {
+  console.log('✅ assessmentMutation created, isPending:', assessmentMutation.isPending);
+
+  const handleFormSubmit = useCallback((event?: React.MouseEvent) => {
+    // Prevent default if called from an event
+    if (event) {
+      event.preventDefault();
+      event.stopPropagation();
+    }
+
+    // Protection: Don't submit if step just changed (within 500ms)
+    const timeSinceStepChange = Date.now() - lastStepChangeRef.current;
+    if (timeSinceStepChange < 500) {
+      console.warn(`⚠️ Step changed ${timeSinceStepChange}ms ago, ignoring premature submission`);
+      return;
+    }
+
+    // Triple protection against multiple submissions
+    if (isSubmittingRef.current) {
+      console.warn('⚠️ Assessment already in progress (ref check), ignoring duplicate submission');
+      return;
+    }
+
+    if (assessmentMutation.isPending) {
+      console.warn('⚠️ Assessment already in progress (state check), ignoring duplicate submission');
+      return;
+    }
+
+    if (!isFormValid()) {
+      console.warn('⚠️ Form is not valid, cannot submit');
+      return;
+    }
+
+    console.log('✅ User clicked submit button, starting assessment...');
+    console.log('📋 Form data:', formData);
     assessmentMutation.mutate(formData);
-  };
+  }, [assessmentMutation, formData]);
+
+  const handleStepChange = useCallback((newStep: number) => {
+    console.log(`🔄 Changing step from ${currentStep} to ${newStep}`);
+    lastStepChangeRef.current = Date.now();
+    setCurrentStep(newStep);
+  }, [currentStep]);
 
   const handleInputChange = (field: string, value: any) => {
     setFormData(prev => ({ ...prev, [field]: value }));
@@ -435,7 +565,7 @@ export default function Assessment() {
   const startNewAssessment = () => {
     setAssessmentResult(null);
     setIsFormCompleted(false);
-    setCurrentStep(0);
+    handleStepChange(0);
     setFormData({
       systemName: '',
       industrySector: '',
@@ -444,6 +574,7 @@ export default function Assessment() {
     });
     setCurrentRiskScore(0);
     setCurrentRiskLevel('minimal');
+    isSubmittingRef.current = false; // Reset submission flag
   };
 
   const getRiskValueColor = (value: number) => {
@@ -534,6 +665,11 @@ export default function Assessment() {
                     id="systemName"
                     value={formData.systemName}
                     onChange={(e) => handleInputChange('systemName', e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') {
+                        e.preventDefault();
+                      }
+                    }}
                     placeholder="Ex: Système de recommandation produits"
                     data-testid="input-system-name"
                   />
@@ -581,7 +717,7 @@ export default function Assessment() {
           {/* Risk Assessment Dimensions */}
           <Tabs value={RISK_ASSESSMENT_DIMENSIONS[currentStep]?.id} onValueChange={(value) => {
             const stepIndex = RISK_ASSESSMENT_DIMENSIONS.findIndex(d => d.id === value);
-            setCurrentStep(stepIndex);
+            handleStepChange(stepIndex);
           }}>
             <TabsList className="grid grid-cols-4 lg:grid-cols-7 mb-6">
               {RISK_ASSESSMENT_DIMENSIONS.map((dimension, index) => {
@@ -679,30 +815,53 @@ export default function Assessment() {
           {/* Navigation */}
           <div className="flex justify-between items-center">
             <Button
+              type="button"
               variant="outline"
-              onClick={() => setCurrentStep(Math.max(0, currentStep - 1))}
+              onClick={() => handleStepChange(Math.max(0, currentStep - 1))}
               disabled={currentStep === 0}
               data-testid="button-previous"
             >
               Précédent
             </Button>
-            
-            <div className="flex gap-2">
-              {currentStep < RISK_ASSESSMENT_DIMENSIONS.length - 1 ? (
-                <Button
-                  onClick={() => setCurrentStep(Math.min(RISK_ASSESSMENT_DIMENSIONS.length - 1, currentStep + 1))}
-                  data-testid="button-next"
-                >
-                  Suivant
-                </Button>
-              ) : (
-                <Button
-                  onClick={handleFormSubmit}
-                  disabled={!isFormValid() || assessmentMutation.isPending}
-                  data-testid="button-submit-assessment"
-                >
-                  {assessmentMutation.isPending ? 'Évaluation en cours...' : 'Lancer l\'évaluation'}
-                </Button>
+
+            <div className="flex flex-col gap-2 items-end">
+              <div className="flex gap-2">
+                {currentStep < RISK_ASSESSMENT_DIMENSIONS.length - 1 ? (
+                  <Button
+                    type="button"
+                    onClick={() => handleStepChange(Math.min(RISK_ASSESSMENT_DIMENSIONS.length - 1, currentStep + 1))}
+                    data-testid="button-next"
+                  >
+                    Suivant
+                  </Button>
+                ) : (
+                  <Button
+                    type="button"
+                    onClick={handleFormSubmit}
+                    disabled={!isFormValid() || assessmentMutation.isPending}
+                    data-testid="button-submit-assessment"
+                  >
+                    {assessmentMutation.isPending ? 'Évaluation en cours...' : 'Lancer l\'évaluation'}
+                  </Button>
+                )}
+              </div>
+              {currentStep === RISK_ASSESSMENT_DIMENSIONS.length - 1 && !isFormValid() && (
+                <div className="text-xs text-amber-600 bg-amber-50 border border-amber-200 rounded px-3 py-2">
+                  <p className="font-medium">⚠️ Veuillez compléter toutes les étapes:</p>
+                  <ul className="mt-1 space-y-1">
+                    {!formData.systemName && <li>• Nom du système</li>}
+                    {!formData.industrySector && <li>• Secteur d'activité</li>}
+                    {!formData.primaryUseCase && <li>• Cas d'usage principal</li>}
+                    {RISK_ASSESSMENT_DIMENSIONS.map((dim, idx) => {
+                      const answered = dim.questions.filter(q => formData.responses[q.id] !== undefined).length;
+                      const total = dim.questions.length;
+                      if (answered < total) {
+                        return <li key={dim.id}>• {dim.name}: {answered}/{total} questions</li>;
+                      }
+                      return null;
+                    })}
+                  </ul>
+                </div>
               )}
             </div>
           </div>
@@ -714,9 +873,10 @@ export default function Assessment() {
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 Résultat de l'évaluation
-                <Button 
-                  variant="outline" 
-                  size="sm" 
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
                   onClick={startNewAssessment}
                   data-testid="button-new-assessment"
                 >
