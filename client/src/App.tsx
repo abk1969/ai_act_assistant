@@ -15,6 +15,9 @@ import Documents from "@/pages/documents";
 import Certificates from "@/pages/certificates";
 import Monitoring from "@/pages/monitoring";
 import Settings from "@/pages/settings";
+import MFASetup from "@/pages/mfa-setup";
+import Sessions from "@/pages/sessions";
+import SecurityAdmin from "@/pages/security-admin";
 import NotFound from "@/pages/not-found";
 import MainLayout from "@/components/layout/main-layout";
 
@@ -43,6 +46,9 @@ function Router() {
           <Route path="/certificates" component={Certificates} />
           <Route path="/monitoring" component={Monitoring} />
           <Route path="/settings" component={Settings} />
+          <Route path="/security/mfa" component={MFASetup} />
+          <Route path="/security/sessions" component={Sessions} />
+          <Route path="/security/admin" component={SecurityAdmin} />
         </MainLayout>
       )}
       <Route component={NotFound} />

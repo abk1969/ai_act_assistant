@@ -9,6 +9,13 @@ import {
   llmSettings,
   maturityAssessments,
   complianceCertificates,
+  // Security tables
+  securitySettings,
+  userMfaSettings,
+  userSecurityEvents,
+  passwordResetTokens,
+  userSessions,
+  failedLoginAttempts,
   type User,
   type UpsertUser,
   type AiSystem,
@@ -27,6 +34,20 @@ import {
   type InsertMaturityAssessment,
   type ComplianceCertificate,
   type InsertComplianceCertificate,
+  // Security types
+  type SecuritySettings,
+  type InsertSecuritySettings,
+  type UpdateSecuritySettings,
+  type UserMfaSettings,
+  type InsertUserMfaSettings,
+  type UserSecurityEvent,
+  type InsertUserSecurityEvent,
+  type PasswordResetToken,
+  type InsertPasswordResetToken,
+  type UserSession,
+  type InsertUserSession,
+  type FailedLoginAttempt,
+  type InsertFailedLoginAttempt,
 } from "@shared/schema";
 import { db } from "./db";
 import { eq, desc, and, sql, ilike } from "drizzle-orm";
@@ -92,6 +113,73 @@ export interface IStorage {
   getCertificateByNumber(certificateNumber: string): Promise<ComplianceCertificate | undefined>;
   getValidCertificates(userId: string): Promise<ComplianceCertificate[]>;
   updateCertificateStatus(id: string, status: 'valid' | 'expired' | 'revoked' | 'pending'): Promise<ComplianceCertificate>;
+
+  // Security Settings
+  getSecuritySettings(): Promise<SecuritySettings | undefined>;
+  createSecuritySettings(settings: InsertSecuritySettings): Promise<SecuritySettings>;
+  updateSecuritySettings(updates: UpdateSecuritySettings): Promise<SecuritySettings>;
+
+  // User MFA Settings
+  getUserMfaSettings(userId: string): Promise<UserMfaSettings | undefined>;
+  upsertUserMfaSettings(settings: InsertUserMfaSettings): Promise<UserMfaSettings>;
+  updateUserMfaSettings(userId: string, updates: Partial<InsertUserMfaSettings>): Promise<UserMfaSettings>;
+
+  // User Security Events
+  createUserSecurityEvent(event: InsertUserSecurityEvent): Promise<UserSecurityEvent>;
+  getUserSecurityEvents(userId: string, options?: {
+    eventType?: string;
+    since?: Date;
+    until?: Date;
+    limit?: number;
+    offset?: number;
+  }): Promise<UserSecurityEvent[]>;
+  getSecurityEventsByIp(ipAddress: string, options?: {
+    since?: Date;
+    until?: Date;
+    limit?: number;
+    offset?: number;
+  }): Promise<UserSecurityEvent[]>;
+  getSecurityEventsSince(since: Date): Promise<UserSecurityEvent[]>;
+  getSecurityEventsForExport(options?: {
+    since?: Date;
+    until?: Date;
+    userId?: string;
+    eventType?: string;
+  }): Promise<UserSecurityEvent[]>;
+  deleteSecurityEventsOlderThan(date: Date): Promise<void>;
+
+  // Password Reset Tokens
+  createPasswordResetToken(token: InsertPasswordResetToken): Promise<PasswordResetToken>;
+  getPasswordResetToken(tokenHash: string): Promise<PasswordResetToken | undefined>;
+  markPasswordResetTokenUsed(tokenId: string): Promise<void>;
+  deleteExpiredPasswordResetTokens(): Promise<void>;
+
+  // User Sessions
+  createUserSession(session: InsertUserSession): Promise<UserSession>;
+  getUserSessionByToken(sessionToken: string): Promise<UserSession | undefined>;
+  getUserSessions(userId: string, options?: {
+    status?: 'active' | 'expired' | 'revoked';
+    limit?: number;
+  }): Promise<UserSession[]>;
+  getUserSessionsByIp(userId: string, ipAddress: string, options?: {
+    since?: Date;
+  }): Promise<UserSession[]>;
+  updateUserSessionActivity(sessionToken: string): Promise<void>;
+  revokeUserSession(sessionToken: string): Promise<void>;
+  deleteExpiredSessions(): Promise<void>;
+
+  // Failed Login Attempts
+  createFailedLoginAttempt(attempt: InsertFailedLoginAttempt): Promise<FailedLoginAttempt>;
+  getFailedLoginAttempts(options: {
+    userId?: string;
+    ipAddress?: string;
+    email?: string;
+    since?: Date;
+  }): Promise<FailedLoginAttempt[]>;
+  deleteFailedLoginAttemptsOlderThan(date: Date): Promise<void>;
+
+  // User Password Management
+  updateUserPassword(userId: string, passwordHash: string): Promise<void>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -411,6 +499,344 @@ export class DatabaseStorage implements IStorage {
       .where(eq(complianceCertificates.id, id))
       .returning();
     return certificate;
+  }
+
+  // Security Settings
+  async getSecuritySettings(): Promise<SecuritySettings | undefined> {
+    const [settings] = await db.select().from(securitySettings).limit(1);
+    return settings;
+  }
+
+  async createSecuritySettings(settings: InsertSecuritySettings): Promise<SecuritySettings> {
+    const [created] = await db.insert(securitySettings).values(settings).returning();
+    return created;
+  }
+
+  async updateSecuritySettings(updates: UpdateSecuritySettings): Promise<SecuritySettings> {
+    // Get existing settings first
+    const existing = await this.getSecuritySettings();
+    if (!existing) {
+      throw new Error('No security settings found to update');
+    }
+
+    const [updated] = await db
+      .update(securitySettings)
+      .set({ ...updates, updatedAt: new Date() })
+      .where(eq(securitySettings.id, existing.id))
+      .returning();
+    return updated;
+  }
+
+  // User MFA Settings
+  async getUserMfaSettings(userId: string): Promise<UserMfaSettings | undefined> {
+    const [settings] = await db
+      .select()
+      .from(userMfaSettings)
+      .where(eq(userMfaSettings.userId, userId));
+    return settings;
+  }
+
+  async upsertUserMfaSettings(settings: InsertUserMfaSettings): Promise<UserMfaSettings> {
+    const [upserted] = await db
+      .insert(userMfaSettings)
+      .values(settings)
+      .onConflictDoUpdate({
+        target: userMfaSettings.userId,
+        set: { ...settings, updatedAt: new Date() },
+      })
+      .returning();
+    return upserted;
+  }
+
+  async updateUserMfaSettings(userId: string, updates: Partial<InsertUserMfaSettings>): Promise<UserMfaSettings> {
+    const [updated] = await db
+      .update(userMfaSettings)
+      .set({ ...updates, updatedAt: new Date() })
+      .where(eq(userMfaSettings.userId, userId))
+      .returning();
+    return updated;
+  }
+
+  // User Security Events
+  async createUserSecurityEvent(event: InsertUserSecurityEvent): Promise<UserSecurityEvent> {
+    const [created] = await db.insert(userSecurityEvents).values(event).returning();
+    return created;
+  }
+
+  async getUserSecurityEvents(userId: string, options: {
+    eventType?: string;
+    since?: Date;
+    until?: Date;
+    limit?: number;
+    offset?: number;
+  } = {}): Promise<UserSecurityEvent[]> {
+    let query = db
+      .select()
+      .from(userSecurityEvents)
+      .where(eq(userSecurityEvents.userId, userId));
+
+    if (options.eventType) {
+      query = query.where(eq(userSecurityEvents.eventType, options.eventType as any));
+    }
+
+    if (options.since) {
+      query = query.where(sql`${userSecurityEvents.createdAt} >= ${options.since}`);
+    }
+
+    if (options.until) {
+      query = query.where(sql`${userSecurityEvents.createdAt} <= ${options.until}`);
+    }
+
+    query = query.orderBy(desc(userSecurityEvents.createdAt));
+
+    if (options.limit) {
+      query = query.limit(options.limit);
+    }
+
+    if (options.offset) {
+      query = query.offset(options.offset);
+    }
+
+    return query;
+  }
+
+  async getSecurityEventsByIp(ipAddress: string, options: {
+    since?: Date;
+    until?: Date;
+    limit?: number;
+    offset?: number;
+  } = {}): Promise<UserSecurityEvent[]> {
+    let query = db
+      .select()
+      .from(userSecurityEvents)
+      .where(eq(userSecurityEvents.ipAddress, ipAddress));
+
+    if (options.since) {
+      query = query.where(sql`${userSecurityEvents.createdAt} >= ${options.since}`);
+    }
+
+    if (options.until) {
+      query = query.where(sql`${userSecurityEvents.createdAt} <= ${options.until}`);
+    }
+
+    query = query.orderBy(desc(userSecurityEvents.createdAt));
+
+    if (options.limit) {
+      query = query.limit(options.limit);
+    }
+
+    if (options.offset) {
+      query = query.offset(options.offset);
+    }
+
+    return query;
+  }
+
+  async getSecurityEventsSince(since: Date): Promise<UserSecurityEvent[]> {
+    return db
+      .select()
+      .from(userSecurityEvents)
+      .where(sql`${userSecurityEvents.createdAt} >= ${since}`)
+      .orderBy(desc(userSecurityEvents.createdAt));
+  }
+
+  async getSecurityEventsForExport(options: {
+    since?: Date;
+    until?: Date;
+    userId?: string;
+    eventType?: string;
+  } = {}): Promise<UserSecurityEvent[]> {
+    let query = db.select().from(userSecurityEvents);
+
+    const conditions = [];
+
+    if (options.since) {
+      conditions.push(sql`${userSecurityEvents.createdAt} >= ${options.since}`);
+    }
+
+    if (options.until) {
+      conditions.push(sql`${userSecurityEvents.createdAt} <= ${options.until}`);
+    }
+
+    if (options.userId) {
+      conditions.push(eq(userSecurityEvents.userId, options.userId));
+    }
+
+    if (options.eventType) {
+      conditions.push(eq(userSecurityEvents.eventType, options.eventType as any));
+    }
+
+    if (conditions.length > 0) {
+      query = query.where(and(...conditions));
+    }
+
+    return query.orderBy(desc(userSecurityEvents.createdAt));
+  }
+
+  async deleteSecurityEventsOlderThan(date: Date): Promise<void> {
+    await db
+      .delete(userSecurityEvents)
+      .where(sql`${userSecurityEvents.createdAt} < ${date}`);
+  }
+
+  // Password Reset Tokens
+  async createPasswordResetToken(token: InsertPasswordResetToken): Promise<PasswordResetToken> {
+    const [created] = await db.insert(passwordResetTokens).values(token).returning();
+    return created;
+  }
+
+  async getPasswordResetToken(tokenHash: string): Promise<PasswordResetToken | undefined> {
+    const [token] = await db
+      .select()
+      .from(passwordResetTokens)
+      .where(eq(passwordResetTokens.token, tokenHash));
+    return token;
+  }
+
+  async markPasswordResetTokenUsed(tokenId: string): Promise<void> {
+    await db
+      .update(passwordResetTokens)
+      .set({ usedAt: new Date() })
+      .where(eq(passwordResetTokens.id, tokenId));
+  }
+
+  async deleteExpiredPasswordResetTokens(): Promise<void> {
+    await db
+      .delete(passwordResetTokens)
+      .where(sql`${passwordResetTokens.expiresAt} < ${new Date()}`);
+  }
+
+  // User Sessions
+  async createUserSession(session: InsertUserSession): Promise<UserSession> {
+    const [created] = await db.insert(userSessions).values(session).returning();
+    return created;
+  }
+
+  async getUserSessionByToken(sessionToken: string): Promise<UserSession | undefined> {
+    const [session] = await db
+      .select()
+      .from(userSessions)
+      .where(eq(userSessions.sessionToken, sessionToken));
+    return session;
+  }
+
+  async getUserSessions(userId: string, options: {
+    status?: 'active' | 'expired' | 'revoked';
+    limit?: number;
+  } = {}): Promise<UserSession[]> {
+    let query = db
+      .select()
+      .from(userSessions)
+      .where(eq(userSessions.userId, userId));
+
+    if (options.status) {
+      query = query.where(eq(userSessions.status, options.status));
+    }
+
+    query = query.orderBy(desc(userSessions.lastActivityAt));
+
+    if (options.limit) {
+      query = query.limit(options.limit);
+    }
+
+    return query;
+  }
+
+  async getUserSessionsByIp(userId: string, ipAddress: string, options: {
+    since?: Date;
+  } = {}): Promise<UserSession[]> {
+    let query = db
+      .select()
+      .from(userSessions)
+      .where(and(
+        eq(userSessions.userId, userId),
+        eq(userSessions.ipAddress, ipAddress)
+      ));
+
+    if (options.since) {
+      query = query.where(sql`${userSessions.createdAt} >= ${options.since}`);
+    }
+
+    return query.orderBy(desc(userSessions.createdAt));
+  }
+
+  async updateUserSessionActivity(sessionToken: string): Promise<void> {
+    await db
+      .update(userSessions)
+      .set({ lastActivityAt: new Date() })
+      .where(eq(userSessions.sessionToken, sessionToken));
+  }
+
+  async revokeUserSession(sessionToken: string): Promise<void> {
+    await db
+      .update(userSessions)
+      .set({
+        status: 'revoked',
+        revokedAt: new Date()
+      })
+      .where(eq(userSessions.sessionToken, sessionToken));
+  }
+
+  async deleteExpiredSessions(): Promise<void> {
+    await db
+      .delete(userSessions)
+      .where(sql`${userSessions.expiresAt} < ${new Date()}`);
+  }
+
+  // Failed Login Attempts
+  async createFailedLoginAttempt(attempt: InsertFailedLoginAttempt): Promise<FailedLoginAttempt> {
+    const [created] = await db.insert(failedLoginAttempts).values(attempt).returning();
+    return created;
+  }
+
+  async getFailedLoginAttempts(options: {
+    userId?: string;
+    ipAddress?: string;
+    email?: string;
+    since?: Date;
+  }): Promise<FailedLoginAttempt[]> {
+    let query = db.select().from(failedLoginAttempts);
+
+    const conditions = [];
+
+    if (options.userId) {
+      conditions.push(eq(failedLoginAttempts.userId, options.userId));
+    }
+
+    if (options.ipAddress) {
+      conditions.push(eq(failedLoginAttempts.ipAddress, options.ipAddress));
+    }
+
+    if (options.email) {
+      conditions.push(eq(failedLoginAttempts.email, options.email));
+    }
+
+    if (options.since) {
+      conditions.push(sql`${failedLoginAttempts.createdAt} >= ${options.since}`);
+    }
+
+    if (conditions.length > 0) {
+      query = query.where(and(...conditions));
+    }
+
+    return query.orderBy(desc(failedLoginAttempts.createdAt));
+  }
+
+  async deleteFailedLoginAttemptsOlderThan(date: Date): Promise<void> {
+    await db
+      .delete(failedLoginAttempts)
+      .where(sql`${failedLoginAttempts.createdAt} < ${date}`);
+  }
+
+  // User Password Management
+  async updateUserPassword(userId: string, passwordHash: string): Promise<void> {
+    await db
+      .update(users)
+      .set({
+        passwordHash,
+        updatedAt: new Date()
+      })
+      .where(eq(users.id, userId));
   }
 }
 

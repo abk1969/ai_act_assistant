@@ -6,6 +6,7 @@ import type { Express, RequestHandler } from "express";
 import connectPg from "connect-pg-simple";
 import { storage } from "./storage";
 import type { SafeUser, LoginUser, RegisterUser } from "@shared/schema";
+import { passwordService } from "./services/passwordService";
 
 // Session configuration
 export function getSession() {
@@ -30,7 +31,7 @@ export function getSession() {
     saveUninitialized: false,
     cookie: {
       httpOnly: true,
-      secure: process.env.NODE_ENV === "production",
+      secure: false, // Set to false for localhost development (even in production mode)
       sameSite: 'lax',
       maxAge: sessionTtl,
     },
@@ -57,12 +58,23 @@ export class AuthService {
     return email.toLowerCase().trim();
   }
 
-  static async registerUser(userData: RegisterUser): Promise<SafeUser> {
-    // Normalize email and hash the password before storing
-    const normalizedEmail = this.normalizeEmail(userData.email);
-    const passwordHash = await PasswordUtils.hash(userData.password);
-    
+  static async registerUser(userData: RegisterUser, ipAddress?: string, userAgent?: string): Promise<{ success: boolean; user?: SafeUser; error?: string }> {
     try {
+      // Validate password against security policy
+      const securitySettings = await storage.getSecuritySettings().catch(() => undefined);
+      const passwordValidation = passwordService.validatePassword(userData.password, securitySettings);
+
+      if (!passwordValidation.isValid) {
+        return {
+          success: false,
+          error: `Password does not meet security requirements: ${passwordValidation.errors.join(', ')}`
+        };
+      }
+
+      // Normalize email and hash the password before storing
+      const normalizedEmail = this.normalizeEmail(userData.email);
+      const passwordHash = await PasswordUtils.hash(userData.password);
+
       const { password, ...userDataWithoutPassword } = userData;
       const newUser = await storage.upsertUser({
         ...userDataWithoutPassword,
@@ -72,13 +84,14 @@ export class AuthService {
 
       // Return user without password hash
       const { passwordHash: _, ...safeUser } = newUser;
-      return safeUser;
+      return { success: true, user: safeUser };
     } catch (error: any) {
       // Handle unique constraint violation for email
       if (error.code === '23505' || error.message?.includes('unique')) {
-        throw new Error('Email already exists');
+        return { success: false, error: 'Email already exists' };
       }
-      throw error;
+      console.error('Registration error:', error);
+      return { success: false, error: 'Registration failed' };
     }
   }
 

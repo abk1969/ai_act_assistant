@@ -47,6 +47,15 @@ export const systemStatusEnum = pgEnum('system_status', ['draft', 'active', 'arc
 // Maturity levels enum for organizational assessment
 export const maturityLevelEnum = pgEnum('maturity_level', ['initial', 'developing', 'defined', 'managed', 'optimizing']);
 
+// Security enums
+export const mfaTypeEnum = pgEnum('mfa_type', ['totp', 'backup_code']);
+export const securityEventTypeEnum = pgEnum('security_event_type', [
+  'login_success', 'login_failed', 'logout', 'password_changed', 'mfa_enabled',
+  'mfa_disabled', 'mfa_verified', 'password_reset_requested', 'password_reset_completed',
+  'account_locked', 'account_unlocked', 'suspicious_activity'
+]);
+export const sessionStatusEnum = pgEnum('session_status', ['active', 'expired', 'revoked']);
+
 // Positive AI Framework v3.0 dimensions enum
 export const aiFrameworkDimensionEnum = pgEnum('ai_framework_dimension', [
   'justice_fairness',
@@ -156,6 +165,7 @@ export const aiSystems = pgTable("ai_systems", {
   name: varchar("name").notNull(),
   description: text("description"),
   sector: varchar("sector"),
+  primaryUseCase: varchar("primary_use_case"),
   riskLevel: riskLevelEnum("risk_level"),
   status: systemStatusEnum("status").default('draft'),
   assessmentData: jsonb("assessment_data"),
@@ -374,8 +384,192 @@ export const complianceCertificates = pgTable("compliance_certificates", {
   updatedAt: timestamp("updated_at").defaultNow(),
 });
 
+// Security Settings - Global security configuration
+export const securitySettings = pgTable("security_settings", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  // MFA Settings
+  mfaRequired: boolean("mfa_required").default(false),
+  mfaGracePeriodDays: integer("mfa_grace_period_days").default(7),
+
+  // Password Policy
+  passwordMinLength: integer("password_min_length").default(8),
+  passwordMaxLength: integer("password_max_length").default(128),
+  passwordRequireUppercase: boolean("password_require_uppercase").default(true),
+  passwordRequireLowercase: boolean("password_require_lowercase").default(true),
+  passwordRequireNumbers: boolean("password_require_numbers").default(true),
+  passwordRequireSpecialChars: boolean("password_require_special_chars").default(true),
+  passwordExpirationDays: integer("password_expiration_days").default(90),
+  passwordHistoryCount: integer("password_history_count").default(5),
+
+  // Account Security
+  maxLoginAttempts: integer("max_login_attempts").default(5),
+  lockoutDurationMinutes: integer("lockout_duration_minutes").default(15),
+  sessionTimeoutMinutes: integer("session_timeout_minutes").default(480), // 8 hours
+  maxConcurrentSessions: integer("max_concurrent_sessions").default(3),
+
+  // Security Features
+  enableCaptcha: boolean("enable_captcha").default(true),
+  captchaAfterAttempts: integer("captcha_after_attempts").default(3),
+  enableAuditLogging: boolean("enable_audit_logging").default(true),
+  auditLogRetentionDays: integer("audit_log_retention_days").default(90),
+
+  // Encryption
+  encryptionEnabled: boolean("encryption_enabled").default(true),
+  encryptionAlgorithm: varchar("encryption_algorithm").default('AES-256-GCM'),
+
+  // Notifications
+  enableSecurityAlerts: boolean("enable_security_alerts").default(true),
+  alertEmail: varchar("alert_email"),
+
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+// User MFA Settings
+export const userMfaSettings = pgTable("user_mfa_settings", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  userId: varchar("user_id").notNull().references(() => users.id),
+
+  // TOTP Settings
+  totpEnabled: boolean("totp_enabled").default(false),
+  totpSecret: text("totp_secret"), // Encrypted
+  totpBackupCodes: jsonb("totp_backup_codes"), // Array of encrypted backup codes
+  totpVerifiedAt: timestamp("totp_verified_at"),
+
+  // Recovery
+  recoveryEmail: varchar("recovery_email"),
+  recoveryPhone: varchar("recovery_phone"),
+
+  // Metadata
+  lastUsedBackupCode: varchar("last_used_backup_code"),
+  backupCodesUsedCount: integer("backup_codes_used_count").default(0),
+
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+}, (table) => ({
+  uniqueUserMfa: unique().on(table.userId),
+}));
+
+// User Security Events - Audit log
+export const userSecurityEvents = pgTable("user_security_events", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  userId: varchar("user_id").references(() => users.id),
+
+  // Event Details
+  eventType: securityEventTypeEnum("event_type").notNull(),
+  eventDescription: text("event_description"),
+
+  // Request Context
+  ipAddress: varchar("ip_address"),
+  userAgent: text("user_agent"),
+  location: jsonb("location"), // Geolocation data
+
+  // Security Context
+  riskScore: integer("risk_score"), // 0-100
+  isSuccessful: boolean("is_successful").default(true),
+  failureReason: text("failure_reason"),
+
+  // Metadata
+  sessionId: varchar("session_id"),
+  additionalData: jsonb("additional_data"),
+
+  createdAt: timestamp("created_at").defaultNow(),
+}, (table) => [
+  index("idx_user_security_events_user_id").on(table.userId),
+  index("idx_user_security_events_event_type").on(table.eventType),
+  index("idx_user_security_events_created_at").on(table.createdAt),
+  index("idx_user_security_events_ip_address").on(table.ipAddress),
+]);
+
+// Password Reset Tokens
+export const passwordResetTokens = pgTable("password_reset_tokens", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  userId: varchar("user_id").notNull().references(() => users.id),
+
+  token: varchar("token").notNull().unique(), // Hashed token
+  tokenHash: text("token_hash").notNull(), // Additional security
+
+  expiresAt: timestamp("expires_at").notNull(),
+  usedAt: timestamp("used_at"),
+
+  // Request Context
+  requestedFromIp: varchar("requested_from_ip"),
+  requestedFromUserAgent: text("requested_from_user_agent"),
+
+  createdAt: timestamp("created_at").defaultNow(),
+}, (table) => [
+  index("idx_password_reset_tokens_user_id").on(table.userId),
+  index("idx_password_reset_tokens_expires_at").on(table.expiresAt),
+]);
+
+// User Sessions - Enhanced session management
+export const userSessions = pgTable("user_sessions", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  userId: varchar("user_id").notNull().references(() => users.id),
+
+  // Session Details
+  sessionToken: varchar("session_token").notNull().unique(),
+  status: sessionStatusEnum("status").default('active'),
+
+  // Device & Location
+  deviceName: varchar("device_name"),
+  deviceType: varchar("device_type"), // desktop, mobile, tablet
+  browserName: varchar("browser_name"),
+  browserVersion: varchar("browser_version"),
+  osName: varchar("os_name"),
+  osVersion: varchar("os_version"),
+
+  // Network
+  ipAddress: varchar("ip_address"),
+  location: jsonb("location"), // City, country, etc.
+
+  // Security
+  isTrusted: boolean("is_trusted").default(false),
+  riskScore: integer("risk_score").default(0), // 0-100
+
+  // Timestamps
+  lastActivityAt: timestamp("last_activity_at").defaultNow(),
+  expiresAt: timestamp("expires_at").notNull(),
+  revokedAt: timestamp("revoked_at"),
+
+  createdAt: timestamp("created_at").defaultNow(),
+}, (table) => [
+  index("idx_user_sessions_user_id").on(table.userId),
+  index("idx_user_sessions_status").on(table.status),
+  index("idx_user_sessions_expires_at").on(table.expiresAt),
+  index("idx_user_sessions_last_activity").on(table.lastActivityAt),
+]);
+
+// Failed Login Attempts - Rate limiting and security
+export const failedLoginAttempts = pgTable("failed_login_attempts", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+
+  // Target
+  email: varchar("email"), // Can be null for invalid emails
+  userId: varchar("user_id").references(() => users.id), // Null if user doesn't exist
+
+  // Request Details
+  ipAddress: varchar("ip_address").notNull(),
+  userAgent: text("user_agent"),
+
+  // Attempt Details
+  attemptedPassword: text("attempted_password"), // Hashed for security analysis
+  failureReason: varchar("failure_reason").notNull(), // invalid_email, invalid_password, account_locked, etc.
+
+  // Security Context
+  isBlocked: boolean("is_blocked").default(false),
+  blockExpiresAt: timestamp("block_expires_at"),
+
+  createdAt: timestamp("created_at").defaultNow(),
+}, (table) => [
+  index("idx_failed_login_attempts_ip").on(table.ipAddress),
+  index("idx_failed_login_attempts_email").on(table.email),
+  index("idx_failed_login_attempts_user_id").on(table.userId),
+  index("idx_failed_login_attempts_created_at").on(table.createdAt),
+]);
+
 // Relations
-export const usersRelations = relations(users, ({ many }) => ({
+export const usersRelations = relations(users, ({ many, one }) => ({
   aiSystems: many(aiSystems),
   riskAssessments: many(riskAssessments),
   complianceRecords: many(complianceRecords),
@@ -383,6 +577,12 @@ export const usersRelations = relations(users, ({ many }) => ({
   llmSettings: many(llmSettings),
   maturityAssessments: many(maturityAssessments),
   complianceCertificates: many(complianceCertificates),
+  // Security relations
+  mfaSettings: one(userMfaSettings),
+  securityEvents: many(userSecurityEvents),
+  passwordResetTokens: many(passwordResetTokens),
+  sessions: many(userSessions),
+  failedLoginAttempts: many(failedLoginAttempts),
 }));
 
 export const aiSystemsRelations = relations(aiSystems, ({ one, many }) => ({
@@ -446,6 +646,42 @@ export const complianceCertificatesRelations = relations(complianceCertificates,
   maturityAssessment: one(maturityAssessments, {
     fields: [complianceCertificates.maturityAssessmentId],
     references: [maturityAssessments.id],
+  }),
+}));
+
+// Security table relations
+export const userMfaSettingsRelations = relations(userMfaSettings, ({ one }) => ({
+  user: one(users, {
+    fields: [userMfaSettings.userId],
+    references: [users.id],
+  }),
+}));
+
+export const userSecurityEventsRelations = relations(userSecurityEvents, ({ one }) => ({
+  user: one(users, {
+    fields: [userSecurityEvents.userId],
+    references: [users.id],
+  }),
+}));
+
+export const passwordResetTokensRelations = relations(passwordResetTokens, ({ one }) => ({
+  user: one(users, {
+    fields: [passwordResetTokens.userId],
+    references: [users.id],
+  }),
+}));
+
+export const userSessionsRelations = relations(userSessions, ({ one }) => ({
+  user: one(users, {
+    fields: [userSessions.userId],
+    references: [users.id],
+  }),
+}));
+
+export const failedLoginAttemptsRelations = relations(failedLoginAttempts, ({ one }) => ({
+  user: one(users, {
+    fields: [failedLoginAttempts.userId],
+    references: [users.id],
   }),
 }));
 
@@ -531,6 +767,97 @@ export const insertUseCaseRiskMappingSchema = createInsertSchema(useCaseRiskMapp
   updatedAt: true,
 });
 
+// Security schemas
+export const insertSecuritySettingsSchema = createInsertSchema(securitySettings).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export const insertUserMfaSettingsSchema = createInsertSchema(userMfaSettings).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export const insertUserSecurityEventSchema = createInsertSchema(userSecurityEvents).omit({
+  id: true,
+  createdAt: true,
+});
+
+export const insertPasswordResetTokenSchema = createInsertSchema(passwordResetTokens).omit({
+  id: true,
+  createdAt: true,
+});
+
+export const insertUserSessionSchema = createInsertSchema(userSessions).omit({
+  id: true,
+  createdAt: true,
+});
+
+export const insertFailedLoginAttemptSchema = createInsertSchema(failedLoginAttempts).omit({
+  id: true,
+  createdAt: true,
+});
+
+// Enhanced password validation schema
+export const passwordPolicySchema = z.object({
+  minLength: z.number().min(8).max(128),
+  maxLength: z.number().min(8).max(128),
+  requireUppercase: z.boolean(),
+  requireLowercase: z.boolean(),
+  requireNumbers: z.boolean(),
+  requireSpecialChars: z.boolean(),
+  expirationDays: z.number().min(0).max(365),
+  historyCount: z.number().min(0).max(24),
+});
+
+// MFA setup schemas
+export const mfaSetupSchema = z.object({
+  totpSecret: z.string(),
+  verificationCode: z.string().length(6),
+});
+
+export const mfaVerificationSchema = z.object({
+  code: z.string().length(6),
+  backupCode: z.string().optional(),
+});
+
+// Password reset schemas
+export const passwordResetRequestSchema = z.object({
+  email: z.string().email(),
+});
+
+export const passwordResetConfirmSchema = z.object({
+  token: z.string(),
+  newPassword: z.string().min(8),
+});
+
+// Security settings update schema
+export const updateSecuritySettingsSchema = z.object({
+  mfaRequired: z.boolean().optional(),
+  mfaGracePeriodDays: z.number().min(0).max(30).optional(),
+  passwordMinLength: z.number().min(8).max(128).optional(),
+  passwordMaxLength: z.number().min(8).max(128).optional(),
+  passwordRequireUppercase: z.boolean().optional(),
+  passwordRequireLowercase: z.boolean().optional(),
+  passwordRequireNumbers: z.boolean().optional(),
+  passwordRequireSpecialChars: z.boolean().optional(),
+  passwordExpirationDays: z.number().min(0).max(365).optional(),
+  passwordHistoryCount: z.number().min(0).max(24).optional(),
+  maxLoginAttempts: z.number().min(1).max(20).optional(),
+  lockoutDurationMinutes: z.number().min(1).max(1440).optional(),
+  sessionTimeoutMinutes: z.number().min(5).max(1440).optional(),
+  maxConcurrentSessions: z.number().min(1).max(10).optional(),
+  enableCaptcha: z.boolean().optional(),
+  captchaAfterAttempts: z.number().min(1).max(10).optional(),
+  enableAuditLogging: z.boolean().optional(),
+  auditLogRetentionDays: z.number().min(1).max(365).optional(),
+  encryptionEnabled: z.boolean().optional(),
+  enableSecurityAlerts: z.boolean().optional(),
+  alertEmail: z.string().email().optional(),
+});
+
 // Types
 export type UpsertUser = typeof users.$inferInsert;
 export type User = typeof users.$inferSelect;
@@ -541,6 +868,33 @@ export type AiSystem = typeof aiSystems.$inferSelect;
 export type InsertAiSystem = z.infer<typeof insertAiSystemSchema>;
 export type RiskAssessment = typeof riskAssessments.$inferSelect;
 export type InsertRiskAssessment = z.infer<typeof insertRiskAssessmentSchema>;
+
+// Security types
+export type SecuritySettings = typeof securitySettings.$inferSelect;
+export type InsertSecuritySettings = z.infer<typeof insertSecuritySettingsSchema>;
+export type UpdateSecuritySettings = z.infer<typeof updateSecuritySettingsSchema>;
+
+export type UserMfaSettings = typeof userMfaSettings.$inferSelect;
+export type InsertUserMfaSettings = z.infer<typeof insertUserMfaSettingsSchema>;
+
+export type UserSecurityEvent = typeof userSecurityEvents.$inferSelect;
+export type InsertUserSecurityEvent = z.infer<typeof insertUserSecurityEventSchema>;
+
+export type PasswordResetToken = typeof passwordResetTokens.$inferSelect;
+export type InsertPasswordResetToken = z.infer<typeof insertPasswordResetTokenSchema>;
+
+export type UserSession = typeof userSessions.$inferSelect;
+export type InsertUserSession = z.infer<typeof insertUserSessionSchema>;
+
+export type FailedLoginAttempt = typeof failedLoginAttempts.$inferSelect;
+export type InsertFailedLoginAttempt = z.infer<typeof insertFailedLoginAttemptSchema>;
+
+// Security validation types
+export type PasswordPolicy = z.infer<typeof passwordPolicySchema>;
+export type MfaSetup = z.infer<typeof mfaSetupSchema>;
+export type MfaVerification = z.infer<typeof mfaVerificationSchema>;
+export type PasswordResetRequest = z.infer<typeof passwordResetRequestSchema>;
+export type PasswordResetConfirm = z.infer<typeof passwordResetConfirmSchema>;
 
 // New interfaces for Enhanced Risk Assessment (EU AI Act + Framework v3.0)
 export interface RiskAssessmentFormData {

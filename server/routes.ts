@@ -1,125 +1,137 @@
+/**
+ * Routes Configuration - Robust Architecture
+ * Clean separation of concerns with proper middleware and controllers
+ */
+
 import type { Express } from "express";
 import { createServer, type Server } from "http";
-import { storage } from "./storage";
-import { setupAuth, isAuthenticated, AuthService } from "./auth";
+import { z } from "zod";
+import { setupAuth } from "./auth";
 import { assessmentService } from "./services/assessmentService";
 import { complianceService } from "./services/complianceService";
 import { regulatoryService } from "./services/regulatoryService";
 import { llmService } from "./services/llmService";
 import { maturityService } from "./services/maturityService";
-import { insertAiSystemSchema, insertRiskAssessmentSchema, insertLlmSettingsSchema, insertComplianceCertificateSchema, registerUserSchema, loginUserSchema } from "@shared/schema";
-import { z } from "zod";
-import passport from "passport";
+import { storage } from "./storage";
+
+// Security architecture
+import { securityService } from "./services/securityService";
+import { validateSecurityConfiguration } from "./config/security";
+import {
+  basicAuth,
+  enhancedAuth,
+  requireMFA,
+  requireAdmin,
+  authRateLimit,
+  apiRateLimit,
+  strictRateLimit,
+  auditMiddleware,
+  securityErrorHandler
+} from "./middleware/security";
+
+// Controllers
+import { AuthController } from "./controllers/authController";
+import { SecurityController } from "./controllers/securityController";
+import { MFAController } from "./controllers/mfaController";
+import { SessionController } from "./controllers/sessionController";
+
+// Schemas
+import {
+  insertAiSystemSchema,
+  insertRiskAssessmentSchema,
+  insertLlmSettingsSchema,
+  insertComplianceCertificateSchema,
+  mfaSetupSchema,
+  mfaVerificationSchema,
+  passwordResetRequestSchema,
+  passwordResetConfirmSchema
+} from "@shared/schema";
 
 export async function registerRoutes(app: Express): Promise<Server> {
-  // Auth middleware
+  console.log('🔧 Validating security configuration...');
+  validateSecurityConfiguration();
+
+  console.log('🔐 Setting up authentication middleware...');
   await setupAuth(app);
 
-  // Initialize regulatory data
-  await regulatoryService.seedInitialData();
+  console.log('📝 Adding global security middleware...');
+  app.use(auditMiddleware);
 
-  // Auth routes
-  app.get('/api/auth/user', isAuthenticated, async (req: any, res) => {
-    try {
-      const userId = req.user.id;
-      const user = await storage.getUser(userId);
-      
-      if (!user) {
-        return res.status(404).json({ message: "User not found" });
-      }
-      
-      // Initialize LLM configurations from environment variables if not already done
-      try {
-        const existingSettings = await storage.getLlmSettings(userId);
-        if (existingSettings.length === 0) {
-          await llmService.initializeFromEnvironment(userId);
-        }
-      } catch (error) {
-        console.error("Error initializing LLM configurations:", error);
-        // Don't fail the request if LLM initialization fails
-      }
-      
-      // Return safe user without password hash
-      const { passwordHash, ...safeUser } = user;
-      res.json(safeUser);
-    } catch (error) {
-      console.error("Error fetching user:", error);
-      res.status(500).json({ message: "Failed to fetch user" });
-    }
-  });
+  console.log('🌱 Initializing services...');
 
-  // Registration route
-  app.post('/api/auth/register', async (req, res) => {
-    try {
-      const userData = registerUserSchema.parse(req.body);
-      const newUser = await AuthService.registerUser(userData);
-      res.status(201).json({ user: newUser, message: "User registered successfully" });
-    } catch (error: any) {
-      console.error("Error registering user:", error);
-      if (error.message === "Email already exists") {
-        return res.status(409).json({ message: "Email already exists" });
-      }
-      res.status(400).json({ message: "Registration failed" });
-    }
-  });
+  try {
+    console.log('📊 Seeding regulatory data...');
+    await regulatoryService.seedInitialData();
+    console.log('✅ Regulatory service initialized');
+  } catch (error) {
+    console.error('⚠️ Regulatory service initialization failed:', error instanceof Error ? error.message : String(error));
+  }
 
-  // Login route
-  app.post('/api/auth/login', (req, res, next) => {
-    try {
-      // Validate request body
-      loginUserSchema.parse(req.body);
-    } catch (error) {
-      return res.status(400).json({ message: "Invalid request format" });
-    }
+  try {
+    console.log('🛡️ Initializing security settings...');
+    await securityService.initializeSecuritySettings();
+    console.log('✅ Security service initialized');
+  } catch (error) {
+    console.error('⚠️ Security service initialization failed:', error instanceof Error ? error.message : String(error));
+  }
 
-    passport.authenticate('local', (err: any, user: any, info: any) => {
-      if (err) {
-        console.error("Login error:", err);
-        return res.status(500).json({ message: "Internal server error" });
-      }
-      if (!user) {
-        return res.status(401).json({ message: "Invalid email or password" });
-      }
-      
-      // Regenerate session to prevent session fixation attacks
-      req.session.regenerate((regenerateErr) => {
-        if (regenerateErr) {
-          console.error("Session regeneration error:", regenerateErr);
-          return res.status(500).json({ message: "Session error" });
-        }
-        
-        req.logIn(user, (err) => {
-          if (err) {
-            console.error("Session error:", err);
-            return res.status(500).json({ message: "Session error" });
-          }
-          res.json({ user, message: "Login successful" });
-        });
-      });
-    })(req, res, next);
-  });
+  // ===== AUTHENTICATION ROUTES =====
 
-  // Logout route
-  app.post('/api/auth/logout', (req, res) => {
-    req.logout((err) => {
-      if (err) {
-        console.error("Logout error:", err);
-        return res.status(500).json({ message: "Logout failed" });
-      }
-      
-      // Optionally regenerate session after logout for extra security
-      req.session.regenerate((regenerateErr) => {
-        if (regenerateErr) {
-          console.error("Session regeneration after logout error:", regenerateErr);
-          // Don't fail the logout if session regeneration fails
-        }
-        res.json({ message: "Logout successful" });
-      });
-    });
-  });
+  // Get current user - Basic Passport authentication
+  app.get('/api/auth/user', basicAuth, AuthController.getCurrentUser);
+
+  // User registration with rate limiting
+  app.post('/api/auth/register', authRateLimit, AuthController.register);
+
+  // User login with enhanced security
+  app.post('/api/auth/login', authRateLimit, AuthController.login);
+
+  // Secure logout
+  app.post('/api/auth/logout', basicAuth, AuthController.logout);
+
+  // Password reset request
+  app.post('/api/auth/password/reset-request', authRateLimit, AuthController.requestPasswordReset);
+
+  // Password reset confirmation
+  app.post('/api/auth/password/reset-confirm', authRateLimit, AuthController.confirmPasswordReset);
+
+  // ===== SECURITY ROUTES =====
+
+  // Security settings (Admin only)
+  app.get('/api/security/settings', enhancedAuth, requireAdmin, SecurityController.getSecuritySettings);
+  app.put('/api/security/settings', enhancedAuth, requireAdmin, strictRateLimit, SecurityController.updateSecuritySettings);
+
+  // Security status and monitoring
+  app.get('/api/security/status', basicAuth, SecurityController.getSecurityStatus);
+  app.get('/api/security/dashboard', enhancedAuth, requireAdmin, SecurityController.getSecurityDashboard);
+  app.get('/api/security/events', basicAuth, SecurityController.getSecurityEvents);
+  app.get('/api/security/events/export', enhancedAuth, requireAdmin, SecurityController.exportSecurityEvents);
+
+  // ===== MFA ROUTES =====
+
+  // MFA status and management
+  app.get('/api/auth/mfa/status', basicAuth, MFAController.getMFAStatus);
+  app.post('/api/auth/mfa/setup', basicAuth, strictRateLimit, MFAController.setupMFA);
+  app.post('/api/auth/mfa/enable', basicAuth, strictRateLimit, MFAController.enableMFA);
+  app.post('/api/auth/mfa/disable', basicAuth, strictRateLimit, MFAController.disableMFA);
+  app.post('/api/auth/mfa/regenerate-codes', basicAuth, strictRateLimit, MFAController.regenerateBackupCodes);
+  app.post('/api/auth/mfa/verify', basicAuth, MFAController.verifyMFA);
+
+  // ===== SESSION MANAGEMENT ROUTES =====
+
+  // Session management
+  app.get('/api/auth/sessions', basicAuth, SessionController.getUserSessions);
+  app.get('/api/auth/sessions/current', basicAuth, SessionController.getCurrentSession);
+  app.delete('/api/auth/sessions/:sessionId', basicAuth, SessionController.revokeSession);
+  app.delete('/api/auth/sessions', basicAuth, SessionController.revokeAllOtherSessions);
+  app.put('/api/auth/sessions/metadata', basicAuth, SessionController.updateSessionMetadata);
+
+
+
+  // ===== BUSINESS ROUTES =====
 
   // AI Systems routes
-  app.get('/api/ai-systems', isAuthenticated, async (req: any, res) => {
+  app.get('/api/ai-systems', basicAuth, async (req: any, res) => {
     try {
       const userId = req.user.id;
       const systems = await storage.getAiSystemsByUser(userId);
@@ -130,7 +142,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.get('/api/ai-systems/:id', isAuthenticated, async (req: any, res) => {
+  app.get('/api/ai-systems/:id', basicAuth, async (req: any, res) => {
     try {
       const { id } = req.params;
       const system = await storage.getAiSystem(id);
@@ -151,7 +163,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.post('/api/ai-systems', isAuthenticated, async (req: any, res) => {
+  app.post('/api/ai-systems', basicAuth, async (req: any, res) => {
     try {
       const userId = req.user.id;
       const systemData = insertAiSystemSchema.parse({
@@ -177,7 +189,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Risk Assessment routes
-  app.post('/api/assessments', isAuthenticated, async (req: any, res) => {
+  app.post('/api/assessments', basicAuth, async (req: any, res) => {
     let formData;
     try {
       const userId = req.user.id;
@@ -221,7 +233,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.get('/api/assessments/:systemId', isAuthenticated, async (req: any, res) => {
+  app.get('/api/assessments/:systemId', basicAuth, async (req: any, res) => {
     try {
       const { systemId } = req.params;
       const assessments = await storage.getRiskAssessmentsBySystem(systemId);
@@ -243,7 +255,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.post('/api/maturity/assessments', isAuthenticated, async (req: any, res) => {
+  app.post('/api/maturity/assessments', basicAuth, async (req: any, res) => {
     try {
       const userId = req.user.id;
       const formData = req.body;
@@ -264,7 +276,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.get('/api/maturity/assessments', isAuthenticated, async (req: any, res) => {
+  app.get('/api/maturity/assessments', basicAuth, async (req: any, res) => {
     try {
       const userId = req.user.id;
       const assessments = await storage.getMaturityAssessmentsByUser(userId);
@@ -313,7 +325,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Compliance routes
-  app.get('/api/compliance/overview', isAuthenticated, async (req: any, res) => {
+  app.get('/api/compliance/overview', basicAuth, async (req: any, res) => {
     try {
       const userId = req.user.id;
       const overview = await complianceService.getComplianceOverview(userId);
@@ -324,7 +336,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.get('/api/compliance/matrix', isAuthenticated, async (req: any, res) => {
+  app.get('/api/compliance/matrix', basicAuth, async (req: any, res) => {
     try {
       const userId = req.user.id;
       const matrix = await complianceService.getComplianceMatrix(userId);
@@ -335,7 +347,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.post('/api/compliance/report/:systemId', isAuthenticated, async (req: any, res) => {
+  app.post('/api/compliance/report/:systemId', basicAuth, async (req: any, res) => {
     try {
       const userId = req.user.id;
       const { systemId } = req.params;
@@ -349,7 +361,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Document generation routes
-  app.get('/api/documents', isAuthenticated, async (req: any, res) => {
+  app.get('/api/documents', basicAuth, async (req: any, res) => {
     try {
       const userId = req.user.id;
       const { systemId } = req.query;
@@ -373,7 +385,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.post('/api/documents/generate', isAuthenticated, async (req: any, res) => {
+  app.post('/api/documents/generate', basicAuth, async (req: any, res) => {
     try {
       const userId = req.user.id;
       const { systemId, documentType, title } = req.body;
@@ -604,7 +616,7 @@ Le registre doit contenir:
   });
 
   // LLM Settings routes
-  app.get('/api/llm/settings', isAuthenticated, async (req: any, res) => {
+  app.get('/api/llm/settings', basicAuth, async (req: any, res) => {
     try {
       const userId = req.user.id;
       const settings = await storage.getLlmSettings(userId);
@@ -622,7 +634,7 @@ Le registre doit contenir:
     }
   });
 
-  app.post('/api/llm/settings', isAuthenticated, async (req: any, res) => {
+  app.post('/api/llm/settings', basicAuth, async (req: any, res) => {
     try {
       const userId = req.user.id;
       const settingsData = insertLlmSettingsSchema.parse({
@@ -654,7 +666,7 @@ Le registre doit contenir:
     }
   });
 
-  app.post('/api/llm/test-connection', isAuthenticated, async (req: any, res) => {
+  app.post('/api/llm/test-connection', basicAuth, async (req: any, res) => {
     try {
       const userId = req.user.id;
       const { provider } = req.body;
@@ -668,7 +680,7 @@ Le registre doit contenir:
   });
 
   // Dashboard metrics
-  app.get('/api/dashboard/metrics', isAuthenticated, async (req: any, res) => {
+  app.get('/api/dashboard/metrics', basicAuth, async (req: any, res) => {
     try {
       const userId = req.user.id;
       
@@ -701,7 +713,7 @@ Le registre doit contenir:
   });
 
   // Compliance Certificates Routes
-  app.get('/api/certificates', isAuthenticated, async (req: any, res) => {
+  app.get('/api/certificates', basicAuth, async (req: any, res) => {
     try {
       const userId = req.user.id;
       const { systemId, type, status } = req.query;
@@ -732,7 +744,7 @@ Le registre doit contenir:
     }
   });
 
-  app.post('/api/certificates/generate', isAuthenticated, async (req: any, res) => {
+  app.post('/api/certificates/generate', basicAuth, async (req: any, res) => {
     try {
       const userId = req.user.id;
       
@@ -888,7 +900,7 @@ Le registre doit contenir:
     }
   });
 
-  app.get('/api/certificates/:id', isAuthenticated, async (req: any, res) => {
+  app.get('/api/certificates/:id', basicAuth, async (req: any, res) => {
     try {
       const userId = req.user.id;
       const { id } = req.params;
@@ -911,7 +923,7 @@ Le registre doit contenir:
   });
 
 
-  app.patch('/api/certificates/:id/status', isAuthenticated, async (req: any, res) => {
+  app.patch('/api/certificates/:id/status', basicAuth, async (req: any, res) => {
     try {
       const userId = req.user.id;
       const { id } = req.params;

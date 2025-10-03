@@ -11,7 +11,10 @@ import {
   Award,
   Rss,
   Settings,
-  LogOut
+  LogOut,
+  Lock,
+  Monitor,
+  UserCheck
 } from "lucide-react";
 
 interface SidebarProps {
@@ -61,6 +64,24 @@ const navigationItems = [
   },
 ];
 
+const securityItems = [
+  {
+    name: "Configuration MFA",
+    href: "/security/mfa",
+    icon: Lock,
+  },
+  {
+    name: "Gestion des sessions",
+    href: "/security/sessions",
+    icon: Monitor,
+  },
+  {
+    name: "Dashboard sécurité",
+    href: "/security/admin",
+    icon: UserCheck,
+  },
+];
+
 const authorities = [
   { name: "DGCCRF", status: "online" },
   { name: "CNIL", status: "online" },
@@ -103,6 +124,35 @@ export default function Sidebar({ isOpen }: SidebarProps) {
               );
             })}
           </nav>
+
+          {/* Security Section */}
+          <div className="border-t border-border pt-4">
+            <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-3">
+              Sécurité
+            </h3>
+            <nav className="space-y-2">
+              {securityItems.map((item) => {
+                const Icon = item.icon;
+                const isActive = location === item.href;
+
+                return (
+                  <Link key={item.href} href={item.href}>
+                    <Button
+                      variant={isActive ? "secondary" : "ghost"}
+                      className={cn(
+                        "w-full justify-start gap-3",
+                        isActive && "bg-primary/10 text-primary"
+                      )}
+                      data-testid={`nav-security-${item.href.split('/').pop()}`}
+                    >
+                      <Icon className="h-4 w-4" />
+                      <span>{item.name}</span>
+                    </Button>
+                  </Link>
+                );
+              })}
+            </nav>
+          </div>
 
           {/* Authorities Status */}
           <div className="border-t border-border pt-4">

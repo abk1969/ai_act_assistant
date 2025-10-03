@@ -4,6 +4,27 @@ import { setupVite, serveStatic, log } from "./vite";
 import { initializeDatabase } from "./init-db";
 
 const app = express();
+
+// CORS configuration for authentication with cookies
+app.use((req, res, next) => {
+  const origin = req.headers.origin;
+  // Allow requests from same origin or localhost during development
+  if (origin && (origin.includes('localhost') || origin.includes('127.0.0.1'))) {
+    res.setHeader('Access-Control-Allow-Origin', origin);
+  }
+  res.setHeader('Access-Control-Allow-Credentials', 'true');
+  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, PATCH, OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With');
+
+  // Handle preflight requests
+  if (req.method === 'OPTIONS') {
+    res.sendStatus(200);
+    return;
+  }
+
+  next();
+});
+
 app.use(express.json());
 app.use(express.urlencoded({ extended: false }));
 
@@ -38,10 +59,17 @@ app.use((req, res, next) => {
 });
 
 (async () => {
-  // Initialize database tables
-  await initializeDatabase();
-  
-  const server = await registerRoutes(app);
+  try {
+    console.log('🚀 Starting AI Act Navigator server...');
+
+    // Initialize database tables
+    console.log('📊 Initializing database...');
+    await initializeDatabase();
+    console.log('✅ Database initialized');
+
+    console.log('🛣️ Registering routes...');
+    const server = await registerRoutes(app);
+    console.log('✅ Routes registered');
 
   app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {
     const status = err.status || err.statusCode || 500;
@@ -65,11 +93,18 @@ app.use((req, res, next) => {
   // this serves both the API and the client.
   // It is the only port that is not firewalled.
   const port = parseInt(process.env.PORT || '5000', 10);
-  server.listen({
-    port,
-    host: "0.0.0.0",
-    reusePort: true,
-  }, () => {
-    log(`serving on port ${port}`);
-  });
+    console.log('🌐 Starting server...');
+    server.listen({
+      port,
+      host: "0.0.0.0",
+      reusePort: true,
+    }, () => {
+      log(`serving on port ${port}`);
+      console.log(`🎉 Server running on http://localhost:${port}`);
+    });
+  } catch (error) {
+    console.error('❌ Server startup failed:', error);
+    console.error(error.stack);
+    process.exit(1);
+  }
 })();

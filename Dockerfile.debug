@@ -1,0 +1,43 @@
+# AI Act Navigator - Debug Dockerfile
+FROM node:18-alpine
+
+WORKDIR /app
+
+# Install system dependencies
+RUN apk add --no-cache curl wget
+
+# Copy package files
+COPY package*.json ./
+
+# Install dependencies
+RUN npm ci
+
+# Copy source code
+COPY . .
+
+# Build frontend only (not the server bundle)
+RUN npm run build:frontend
+
+# Expose port
+EXPOSE 5000
+
+# Set environment
+ENV NODE_ENV=production
+ENV PORT=5000
+
+# Add debug script that uses tsx directly
+RUN echo '#!/bin/sh' > /app/debug.sh && \
+    echo 'echo "🔍 Debug Information:"' >> /app/debug.sh && \
+    echo 'echo "Node version: $(node --version)"' >> /app/debug.sh && \
+    echo 'echo "NPM version: $(npm --version)"' >> /app/debug.sh && \
+    echo 'echo "Working directory: $(pwd)"' >> /app/debug.sh && \
+    echo 'echo "Files in dist:"' >> /app/debug.sh && \
+    echo 'ls -la dist/ || echo "No dist directory"' >> /app/debug.sh && \
+    echo 'echo "Environment variables:"' >> /app/debug.sh && \
+    echo 'env | grep -E "(NODE_ENV|PORT|DATABASE_URL)" || echo "No relevant env vars"' >> /app/debug.sh && \
+    echo 'echo "Starting application with tsx..."' >> /app/debug.sh && \
+    echo 'npx tsx server/index.ts' >> /app/debug.sh && \
+    chmod +x /app/debug.sh
+
+# Start with debug
+CMD ["/app/debug.sh"]

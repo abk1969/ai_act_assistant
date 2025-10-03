@@ -2,7 +2,7 @@ import { pool } from './db';
 
 export async function initializeDatabase() {
   console.log('🔧 Initializing database tables...');
-  
+
   try {
     // Create users table
     await pool.query(`
