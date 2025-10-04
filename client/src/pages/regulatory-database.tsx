@@ -361,10 +361,10 @@ export default function RegulatoryDatabase() {
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">Toutes catégories</SelectItem>
-                  <SelectItem value="unacceptable">Inacceptable</SelectItem>
-                  <SelectItem value="high">Haut risque</SelectItem>
-                  <SelectItem value="limited">Risque limité</SelectItem>
-                  <SelectItem value="minimal">Risque minimal</SelectItem>
+                  <SelectItem value="unacceptable">🔴 Inacceptable</SelectItem>
+                  <SelectItem value="high">🟠 Haut risque</SelectItem>
+                  <SelectItem value="limited">🟡 Risque limité</SelectItem>
+                  <SelectItem value="null">⚪ Général</SelectItem>
                 </SelectContent>
               </Select>
 
@@ -380,6 +380,14 @@ export default function RegulatoryDatabase() {
                   <SelectItem value="TITRE III">Titre III - Systèmes haut risque</SelectItem>
                   <SelectItem value="TITRE IV">Titre IV - Transparence</SelectItem>
                   <SelectItem value="TITRE V">Titre V - Modèles IA usage général</SelectItem>
+                  <SelectItem value="TITRE VI">Titre VI - Mesures d'appui à l'innovation</SelectItem>
+                  <SelectItem value="TITRE VII">Titre VII - Gouvernance</SelectItem>
+                  <SelectItem value="TITRE VIII">Titre VIII - Base de données UE</SelectItem>
+                  <SelectItem value="TITRE IX">Titre IX - Surveillance du marché</SelectItem>
+                  <SelectItem value="TITRE X">Titre X - Codes de conduite</SelectItem>
+                  <SelectItem value="TITRE XI">Titre XI - Délégation de pouvoir</SelectItem>
+                  <SelectItem value="TITRE XII">Titre XII - Sanctions</SelectItem>
+                  <SelectItem value="TITRE XIII">Titre XIII - Dispositions finales</SelectItem>
                 </SelectContent>
               </Select>
 
@@ -390,10 +398,12 @@ export default function RegulatoryDatabase() {
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">Tous les acteurs</SelectItem>
-                  <SelectItem value="providers">Fournisseurs</SelectItem>
-                  <SelectItem value="deployers">Déployeurs</SelectItem>
-                  <SelectItem value="distributors">Distributeurs</SelectItem>
-                  <SelectItem value="importers">Importateurs</SelectItem>
+                  <SelectItem value="providers">🏭 Fournisseurs</SelectItem>
+                  <SelectItem value="deployers">🚀 Déployeurs</SelectItem>
+                  <SelectItem value="distributors">📦 Distributeurs</SelectItem>
+                  <SelectItem value="importers">🌍 Importateurs</SelectItem>
+                  <SelectItem value="GPAI providers">🤖 Fournisseurs GPAI</SelectItem>
+                  <SelectItem value="public authorities">🏛️ Autorités publiques</SelectItem>
                 </SelectContent>
               </Select>
             </div>

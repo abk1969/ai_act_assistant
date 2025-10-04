@@ -8,7 +8,7 @@ import { completeAiActArticles, aiActStructure, type CompleteArticle } from '../
 
 export interface SearchFilters {
   query?: string;
-  riskCategory?: 'unacceptable' | 'high' | 'limited' | 'minimal' | null;
+  riskCategory?: 'unacceptable' | 'high' | 'limited' | 'null' | null;
   applicableTo?: string[];
   titleNumber?: string;
   chapterNumber?: string;
@@ -114,7 +114,14 @@ class RegulatoryDatabaseService {
         article: a.articleNumber,
         riskCategory: a.riskCategory
       })));
-      results = results.filter(a => a.riskCategory === filters.riskCategory);
+
+      // Handle "null" string for articles with null riskCategory
+      if (filters.riskCategory === 'null') {
+        results = results.filter(a => a.riskCategory === null);
+      } else {
+        results = results.filter(a => a.riskCategory === filters.riskCategory);
+      }
+
       console.log('✅ Articles after riskCategory filter:', results.length);
     }
 
@@ -128,6 +135,8 @@ class RegulatoryDatabaseService {
 
     if (filters.applicableTo && filters.applicableTo.length > 0) {
       results = results.filter(a =>
+        // Include articles with "all" or articles that match the specific role
+        a.applicableTo.includes('all') ||
         filters.applicableTo!.some(role => a.applicableTo.includes(role))
       );
     }
