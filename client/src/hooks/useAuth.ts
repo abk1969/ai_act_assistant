@@ -1,18 +1,19 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useLocation } from "wouter";
-import { apiRequest } from "@/lib/queryClient";
+import { apiRequest, getQueryFn } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import type { SafeUser } from "@shared/schema";
 
 export function useAuth() {
-  const { data: user, isLoading, error } = useQuery<SafeUser>({
+  const { data: user, isLoading, error } = useQuery<SafeUser | null>({
     queryKey: ["/api/auth/user"],
+    queryFn: getQueryFn<SafeUser>({ on401: "returnNull" }),
     retry: false,
     staleTime: 5 * 60 * 1000, // 5 minutes
   });
 
   return {
-    user,
+    user: user || undefined,
     isLoading,
     isAuthenticated: !!user,
     error,
@@ -30,8 +31,15 @@ export function useLogout() {
       return response.json();
     },
     onSuccess: () => {
-      // Clear all query cache to reset app state
-      queryClient.clear();
+      // Invalidate and remove user query to trigger re-fetch which will return null
+      queryClient.setQueryData(["/api/auth/user"], null);
+      queryClient.invalidateQueries({ queryKey: ["/api/auth/user"] });
+
+      // Clear all other query cache to reset app state
+      queryClient.removeQueries({
+        predicate: (query) => query.queryKey[0] !== "/api/auth/user"
+      });
+
       toast({
         title: "Déconnexion réussie",
         description: "Vous avez été déconnecté avec succès.",
