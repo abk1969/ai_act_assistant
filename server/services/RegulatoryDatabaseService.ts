@@ -4,7 +4,7 @@
  */
 
 import { completeAiActArticles, aiActStructure, type CompleteArticle } from '../data/completeAiActDatabase.js';
-import { additionalArticles } from '../data/additionalAiActArticles.js';
+// Note: additionalArticles is already included in completeAiActArticles, no need to import separately
 
 export interface SearchFilters {
   query?: string;
@@ -37,8 +37,28 @@ class RegulatoryDatabaseService {
   private searchIndex: Map<string, Set<string>>; // keyword -> article numbers
 
   constructor() {
-    // Combiner tous les articles (base + additionnels)
-    this.articles = [...completeAiActArticles, ...additionalArticles];
+    // completeAiActArticles already includes additionalArticles (see line 349 of completeAiActDatabase.ts)
+    this.articles = completeAiActArticles;
+    console.log(`📚 RegulatoryDatabaseService initialized with ${this.articles.length} articles`);
+
+    // Check for duplicates
+    const articleNumbers = this.articles.map(a => a.articleNumber);
+    const uniqueNumbers = new Set(articleNumbers);
+    if (articleNumbers.length !== uniqueNumbers.size) {
+      console.warn(`⚠️ WARNING: Found ${articleNumbers.length - uniqueNumbers.size} duplicate articles!`);
+      // Remove duplicates by keeping only the first occurrence
+      const seen = new Set<string>();
+      this.articles = this.articles.filter(article => {
+        if (seen.has(article.articleNumber)) {
+          console.warn(`⚠️ Removing duplicate: ${article.articleNumber}`);
+          return false;
+        }
+        seen.add(article.articleNumber);
+        return true;
+      });
+      console.log(`✅ After deduplication: ${this.articles.length} unique articles`);
+    }
+
     this.searchIndex = this.buildSearchIndex();
   }
 

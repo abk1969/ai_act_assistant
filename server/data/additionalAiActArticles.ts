@@ -4,6 +4,7 @@
  */
 
 import { CompleteArticle } from './completeAiActDatabase';
+import { generatedArticles } from './generatedAiActArticles';
 
 export const additionalArticles: CompleteArticle[] = [
   // TITRE III - Suite des obligations
@@ -291,6 +292,8 @@ export const additionalArticles: CompleteArticle[] = [
     annexReferences: ["Annexe VIII"],
     eurLexUrl: "https://eur-lex.europa.eu/legal-content/FR/TXT/?uri=CELEX:32024R1689",
     officialReference: "Règlement (UE) 2024/1689, Article 72"
-  }
+  },
+  // Ajouter les 90 articles générés automatiquement
+  ...generatedArticles
 ];
 
