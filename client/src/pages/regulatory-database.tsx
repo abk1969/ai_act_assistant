@@ -167,8 +167,8 @@ export default function RegulatoryDatabase() {
           {/* Statistics Cards avec animations et cliquables */}
           {stats && (
             <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
-              <Card
-                className="hover:shadow-xl transition-all duration-300 border-l-4 border-l-blue-500 hover:scale-105 cursor-pointer"
+              <div
+                className="cursor-pointer"
                 onClick={() => {
                   setSearchQuery('');
                   setSelectedRiskCategory('all');
@@ -176,21 +176,23 @@ export default function RegulatoryDatabase() {
                   scrollToResults();
                 }}
               >
-                <CardContent className="pt-6">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <div className="text-4xl font-extrabold text-blue-600 mb-1">{stats.totalArticles}</div>
-                      <div className="text-sm font-medium text-gray-600">Articles totaux</div>
+                <Card className="hover:shadow-xl transition-all duration-300 border-l-4 border-l-blue-500 hover:scale-105 h-full">
+                  <CardContent className="pt-6">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <div className="text-4xl font-extrabold text-blue-600 mb-1">{stats.totalArticles}</div>
+                        <div className="text-sm font-medium text-gray-600">Articles totaux</div>
+                      </div>
+                      <div className="p-3 bg-blue-100 rounded-full">
+                        <BookOpen className="w-6 h-6 text-blue-600" />
+                      </div>
                     </div>
-                    <div className="p-3 bg-blue-100 rounded-full">
-                      <BookOpen className="w-6 h-6 text-blue-600" />
-                    </div>
-                  </div>
-                  <div className="mt-3 text-xs text-blue-600 font-semibold">✓ Cliquez pour voir tous</div>
-                </CardContent>
-              </Card>
-              <Card
-                className="hover:shadow-xl transition-all duration-300 border-l-4 border-l-red-500 hover:scale-105 cursor-pointer"
+                    <div className="mt-3 text-xs text-blue-600 font-semibold">✓ Cliquez pour voir tous</div>
+                  </CardContent>
+                </Card>
+              </div>
+              <div
+                className="cursor-pointer"
                 onClick={() => {
                   setSearchQuery('');
                   setSelectedRiskCategory('unacceptable');
@@ -198,21 +200,23 @@ export default function RegulatoryDatabase() {
                   scrollToResults();
                 }}
               >
-                <CardContent className="pt-6">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <div className="text-4xl font-extrabold text-red-600 mb-1">{stats.byRiskCategory.unacceptable || 0}</div>
-                      <div className="text-sm font-medium text-gray-600">Pratiques interdites</div>
+                <Card className="hover:shadow-xl transition-all duration-300 border-l-4 border-l-red-500 hover:scale-105 h-full">
+                  <CardContent className="pt-6">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <div className="text-4xl font-extrabold text-red-600 mb-1">{stats.byRiskCategory.unacceptable || 0}</div>
+                        <div className="text-sm font-medium text-gray-600">Pratiques interdites</div>
+                      </div>
+                      <div className="p-3 bg-red-100 rounded-full">
+                        <AlertTriangle className="w-6 h-6 text-red-600" />
+                      </div>
                     </div>
-                    <div className="p-3 bg-red-100 rounded-full">
-                      <AlertTriangle className="w-6 h-6 text-red-600" />
-                    </div>
-                  </div>
-                  <div className="mt-3 text-xs text-red-600 font-semibold">✓ Cliquez pour filtrer</div>
-                </CardContent>
-              </Card>
-              <Card
-                className="hover:shadow-xl transition-all duration-300 border-l-4 border-l-orange-500 hover:scale-105 cursor-pointer"
+                    <div className="mt-3 text-xs text-red-600 font-semibold">✓ Cliquez pour filtrer</div>
+                  </CardContent>
+                </Card>
+              </div>
+              <div
+                className="cursor-pointer"
                 onClick={() => {
                   setSearchQuery('');
                   setSelectedRiskCategory('high');
@@ -220,21 +224,23 @@ export default function RegulatoryDatabase() {
                   scrollToResults();
                 }}
               >
-                <CardContent className="pt-6">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <div className="text-4xl font-extrabold text-orange-600 mb-1">{stats.byRiskCategory.high || 0}</div>
-                      <div className="text-sm font-medium text-gray-600">Systèmes haut risque</div>
+                <Card className="hover:shadow-xl transition-all duration-300 border-l-4 border-l-orange-500 hover:scale-105 h-full">
+                  <CardContent className="pt-6">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <div className="text-4xl font-extrabold text-orange-600 mb-1">{stats.byRiskCategory.high || 0}</div>
+                        <div className="text-sm font-medium text-gray-600">Systèmes haut risque</div>
+                      </div>
+                      <div className="p-3 bg-orange-100 rounded-full">
+                        <Shield className="w-6 h-6 text-orange-600" />
+                      </div>
                     </div>
-                    <div className="p-3 bg-orange-100 rounded-full">
-                      <Shield className="w-6 h-6 text-orange-600" />
-                    </div>
-                  </div>
-                  <div className="mt-3 text-xs text-orange-600 font-semibold">✓ Cliquez pour filtrer</div>
-                </CardContent>
-              </Card>
-              <Card
-                className="hover:shadow-xl transition-all duration-300 border-l-4 border-l-purple-500 hover:scale-105 cursor-pointer"
+                    <div className="mt-3 text-xs text-orange-600 font-semibold">✓ Cliquez pour filtrer</div>
+                  </CardContent>
+                </Card>
+              </div>
+              <div
+                className="cursor-pointer"
                 onClick={() => {
                   setSearchQuery('échéance');
                   setSelectedRiskCategory('all');
@@ -242,21 +248,23 @@ export default function RegulatoryDatabase() {
                   scrollToResults();
                 }}
               >
-                <CardContent className="pt-6">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <div className="text-4xl font-extrabold text-purple-600 mb-1">
-                        {stats.upcomingDeadlines.length}
+                <Card className="hover:shadow-xl transition-all duration-300 border-l-4 border-l-purple-500 hover:scale-105 h-full">
+                  <CardContent className="pt-6">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <div className="text-4xl font-extrabold text-purple-600 mb-1">
+                          {stats.upcomingDeadlines.length}
+                        </div>
+                        <div className="text-sm font-medium text-gray-600">Échéances à venir</div>
                       </div>
-                      <div className="text-sm font-medium text-gray-600">Échéances à venir</div>
+                      <div className="p-3 bg-purple-100 rounded-full">
+                        <Calendar className="w-6 h-6 text-purple-600" />
+                      </div>
                     </div>
-                    <div className="p-3 bg-purple-100 rounded-full">
-                      <Calendar className="w-6 h-6 text-purple-600" />
-                    </div>
-                  </div>
-                  <div className="mt-3 text-xs text-purple-600 font-semibold">✓ Cliquez pour voir</div>
-                </CardContent>
-              </Card>
+                    <div className="mt-3 text-xs text-purple-600 font-semibold">✓ Cliquez pour voir</div>
+                  </CardContent>
+                </Card>
+              </div>
             </div>
           )}
 
