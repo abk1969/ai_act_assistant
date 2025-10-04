@@ -93,6 +93,7 @@ export default function RegulatoryDatabase() {
       if (selectedApplicability !== 'all') params.append('applicableTo', selectedApplicability);
 
       const url = `/api/regulatory-database/search?${params.toString()}`;
+      console.log('Fetching regulatory data with URL:', url);
       const res = await fetch(url, { credentials: 'include' });
 
       if (!res.ok) {
@@ -101,6 +102,8 @@ export default function RegulatoryDatabase() {
 
       return res.json();
     },
+    staleTime: 0, // Always refetch when parameters change
+    refetchOnMount: true,
   });
 
   // Risk category colors and icons
