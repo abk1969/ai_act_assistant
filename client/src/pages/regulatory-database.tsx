@@ -76,7 +76,7 @@ export default function RegulatoryDatabase() {
     queryKey: ['/api/regulatory-database/stats'],
   });
 
-  // Fetch search results
+  // Fetch search results with custom queryFn
   const { data: searchResults, isLoading } = useQuery<SearchResult[]>({
     queryKey: ['/api/regulatory-database/search', {
       query: searchQuery || undefined,
@@ -84,6 +84,23 @@ export default function RegulatoryDatabase() {
       titleNumber: selectedTitle !== 'all' ? selectedTitle : undefined,
       applicableTo: selectedApplicability !== 'all' ? [selectedApplicability] : undefined,
     }],
+    queryFn: async () => {
+      const params = new URLSearchParams();
+
+      if (searchQuery) params.append('query', searchQuery);
+      if (selectedRiskCategory !== 'all') params.append('riskCategory', selectedRiskCategory);
+      if (selectedTitle !== 'all') params.append('titleNumber', selectedTitle);
+      if (selectedApplicability !== 'all') params.append('applicableTo', selectedApplicability);
+
+      const url = `/api/regulatory-database/search?${params.toString()}`;
+      const res = await fetch(url, { credentials: 'include' });
+
+      if (!res.ok) {
+        throw new Error(`${res.status}: ${res.statusText}`);
+      }
+
+      return res.json();
+    },
   });
 
   // Risk category colors and icons
