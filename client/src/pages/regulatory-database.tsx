@@ -64,6 +64,15 @@ export default function RegulatoryDatabase() {
   // Ref for scrolling to results section
   const resultsRef = useRef<HTMLDivElement>(null);
 
+  // Calculate active filter from current state (no separate state needed)
+  const activeFilter = useMemo(() => {
+    if (searchQuery === 'échéance') return 'deadlines';
+    if (selectedRiskCategory === 'unacceptable') return 'unacceptable';
+    if (selectedRiskCategory === 'high') return 'high';
+    if (selectedRiskCategory === 'all' && !searchQuery) return 'all';
+    return 'manual';
+  }, [searchQuery, selectedRiskCategory]);
+
   // Function to scroll to results
   const scrollToResults = () => {
     setTimeout(() => {
@@ -196,10 +205,11 @@ export default function RegulatoryDatabase() {
                   setSearchQuery('');
                   setSelectedRiskCategory('all');
                   setSelectedTitle('all');
+                  setSelectedApplicability('all');
                   scrollToResults();
                 }}
               >
-                <Card className="hover:shadow-xl transition-all duration-300 border-l-4 border-l-blue-500 hover:scale-105 h-full">
+                <Card className={`hover:shadow-xl transition-all duration-300 border-l-4 border-l-blue-500 hover:scale-105 h-full ${activeFilter === 'all' ? 'ring-2 ring-blue-500 shadow-lg' : ''}`}>
                   <CardContent className="pt-6">
                     <div className="flex items-center justify-between">
                       <div>
@@ -210,7 +220,9 @@ export default function RegulatoryDatabase() {
                         <BookOpen className="w-6 h-6 text-blue-600" />
                       </div>
                     </div>
-                    <div className="mt-3 text-xs text-blue-600 font-semibold">✓ Cliquez pour voir tous</div>
+                    <div className="mt-3 text-xs text-blue-600 font-semibold">
+                      {activeFilter === 'all' ? '✓ Filtre actif' : '✓ Cliquez pour voir tous'}
+                    </div>
                   </CardContent>
                 </Card>
               </div>
@@ -223,10 +235,11 @@ export default function RegulatoryDatabase() {
                   setSearchQuery('');
                   setSelectedRiskCategory('unacceptable');
                   setSelectedTitle('all');
+                  setSelectedApplicability('all');
                   scrollToResults();
                 }}
               >
-                <Card className="hover:shadow-xl transition-all duration-300 border-l-4 border-l-red-500 hover:scale-105 h-full">
+                <Card className={`hover:shadow-xl transition-all duration-300 border-l-4 border-l-red-500 hover:scale-105 h-full ${activeFilter === 'unacceptable' ? 'ring-2 ring-red-500 shadow-lg' : ''}`}>
                   <CardContent className="pt-6">
                     <div className="flex items-center justify-between">
                       <div>
@@ -237,7 +250,9 @@ export default function RegulatoryDatabase() {
                         <AlertTriangle className="w-6 h-6 text-red-600" />
                       </div>
                     </div>
-                    <div className="mt-3 text-xs text-red-600 font-semibold">✓ Cliquez pour filtrer</div>
+                    <div className="mt-3 text-xs text-red-600 font-semibold">
+                      {activeFilter === 'unacceptable' ? '✓ Filtre actif' : '✓ Cliquez pour filtrer'}
+                    </div>
                   </CardContent>
                 </Card>
               </div>
@@ -250,10 +265,11 @@ export default function RegulatoryDatabase() {
                   setSearchQuery('');
                   setSelectedRiskCategory('high');
                   setSelectedTitle('all');
+                  setSelectedApplicability('all');
                   scrollToResults();
                 }}
               >
-                <Card className="hover:shadow-xl transition-all duration-300 border-l-4 border-l-orange-500 hover:scale-105 h-full">
+                <Card className={`hover:shadow-xl transition-all duration-300 border-l-4 border-l-orange-500 hover:scale-105 h-full ${activeFilter === 'high' ? 'ring-2 ring-orange-500 shadow-lg' : ''}`}>
                   <CardContent className="pt-6">
                     <div className="flex items-center justify-between">
                       <div>
@@ -264,7 +280,9 @@ export default function RegulatoryDatabase() {
                         <Shield className="w-6 h-6 text-orange-600" />
                       </div>
                     </div>
-                    <div className="mt-3 text-xs text-orange-600 font-semibold">✓ Cliquez pour filtrer</div>
+                    <div className="mt-3 text-xs text-orange-600 font-semibold">
+                      {activeFilter === 'high' ? '✓ Filtre actif' : '✓ Cliquez pour filtrer'}
+                    </div>
                   </CardContent>
                 </Card>
               </div>
@@ -277,10 +295,11 @@ export default function RegulatoryDatabase() {
                   setSearchQuery('échéance');
                   setSelectedRiskCategory('all');
                   setSelectedTitle('all');
+                  setSelectedApplicability('all');
                   scrollToResults();
                 }}
               >
-                <Card className="hover:shadow-xl transition-all duration-300 border-l-4 border-l-purple-500 hover:scale-105 h-full">
+                <Card className={`hover:shadow-xl transition-all duration-300 border-l-4 border-l-purple-500 hover:scale-105 h-full ${activeFilter === 'deadlines' ? 'ring-2 ring-purple-500 shadow-lg' : ''}`}>
                   <CardContent className="pt-6">
                     <div className="flex items-center justify-between">
                       <div>
@@ -293,7 +312,9 @@ export default function RegulatoryDatabase() {
                         <Calendar className="w-6 h-6 text-purple-600" />
                       </div>
                     </div>
-                    <div className="mt-3 text-xs text-purple-600 font-semibold">✓ Cliquez pour voir</div>
+                    <div className="mt-3 text-xs text-purple-600 font-semibold">
+                      {activeFilter === 'deadlines' ? '✓ Filtre actif' : '✓ Cliquez pour voir'}
+                    </div>
                   </CardContent>
                 </Card>
               </div>
@@ -313,6 +334,7 @@ export default function RegulatoryDatabase() {
               />
               {searchQuery && (
                 <button
+                  type="button"
                   onClick={() => setSearchQuery('')}
                   className="absolute right-4 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600"
                 >
@@ -372,9 +394,18 @@ export default function RegulatoryDatabase() {
       {/* Results */}
       <div ref={resultsRef} className="container mx-auto px-6 py-8">
         <div className="mb-4 flex items-center justify-between">
-          <div className="text-sm text-gray-600">
-            {searchResults?.length || 0} article(s) trouvé(s)
-            {searchQuery && ` pour "${searchQuery}"`}
+          <div className="flex items-center gap-4">
+            <div className="text-sm text-gray-600">
+              {searchResults?.length || 0} article(s) trouvé(s)
+              {searchQuery && ` pour "${searchQuery}"`}
+            </div>
+            {activeFilter !== 'all' && (
+              <Badge variant="outline" className="text-xs">
+                {activeFilter === 'unacceptable' && '🔴 Pratiques interdites'}
+                {activeFilter === 'high' && '🟠 Systèmes haut risque'}
+                {activeFilter === 'deadlines' && '🟣 Échéances à venir'}
+              </Badge>
+            )}
           </div>
         </div>
 
