@@ -1,6 +1,7 @@
 import { Link, useLocation } from "wouter";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+import { useLogout } from "@/hooks/useAuth";
 import {
   BarChart3,
   ClipboardCheck,
@@ -91,6 +92,7 @@ const authorities = [
 
 export default function Sidebar({ isOpen }: SidebarProps) {
   const [location] = useLocation();
+  const logout = useLogout();
 
   return (
     <aside
@@ -200,11 +202,12 @@ export default function Sidebar({ isOpen }: SidebarProps) {
             <Button
               variant="ghost"
               className="w-full justify-start gap-3 text-destructive hover:text-destructive hover:bg-destructive/10"
-              onClick={() => window.location.href = '/api/logout'}
+              onClick={() => logout.mutate()}
+              disabled={logout.isPending}
               data-testid="button-logout"
             >
               <LogOut className="h-4 w-4" />
-              <span>Déconnexion</span>
+              <span>{logout.isPending ? 'Déconnexion...' : 'Déconnexion'}</span>
             </Button>
           </div>
         </div>

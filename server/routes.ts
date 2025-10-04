@@ -99,8 +99,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // User login with enhanced security
   app.post('/api/auth/login', authRateLimit, AuthController.login);
 
-  // Secure logout
-  app.post('/api/auth/logout', basicAuth, AuthController.logout);
+  // Secure logout - no auth required to allow logout even with expired session
+  app.post('/api/auth/logout', AuthController.logout);
 
   // Password reset request
   app.post('/api/auth/password/reset-request', authRateLimit, AuthController.requestPasswordReset);
@@ -304,16 +304,28 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get('/api/ai-act/articles', async (req, res) => {
     try {
       const { search, category } = req.query;
-      
+
       let articles;
       if (search) {
         articles = await storage.searchAiActArticles(search as string);
-      } else if (category) {
-        articles = await storage.getArticlesByRiskCategory(category as string);
+      } else if (category && category !== 'all') {
+        // Map UI categories to database risk categories
+        const categoryMap: Record<string, string> = {
+          'prohibited': 'unacceptable',
+          'high_risk': 'high',
+          'transparency': 'limited',
+          'minimal': 'minimal',
+          'governance': 'governance',
+          'documentation': 'documentation',
+          'fundamental_rights': 'rights'
+        };
+
+        const riskCategory = categoryMap[category as string] || category as string;
+        articles = await storage.getArticlesByRiskCategory(riskCategory);
       } else {
         articles = await storage.getAiActArticles();
       }
-      
+
       res.json(articles);
     } catch (error) {
       console.error("Error fetching AI Act articles:", error);
@@ -1015,6 +1027,8 @@ Le registre doit contenir:
    */
   app.get('/api/regulatory-database/search', basicAuth, async (req: any, res) => {
     try {
+      console.log('🌐 API ROUTE - Raw query params:', JSON.stringify(req.query, null, 2));
+
       const filters = {
         query: req.query.query as string | undefined,
         riskCategory: req.query.riskCategory as any,
@@ -1028,7 +1042,21 @@ Le registre doit contenir:
           undefined,
       };
 
+      console.log('🔧 API ROUTE - Constructed filters:', JSON.stringify(filters, null, 2));
+
       const results = await regulatoryDatabaseService.search(filters);
+
+      console.log('📤 API ROUTE - Returning', results.length, 'results');
+      console.log('📋 First 3 results:', results.slice(0, 3).map(r => ({
+        article: r.article.articleNumber,
+        riskCategory: r.article.riskCategory
+      })));
+      console.log('📋 All article numbers being returned:', results.map(r => r.article.articleNumber).join(', '));
+
+      const responseBody = JSON.stringify(results);
+      console.log('📦 Response size:', responseBody.length, 'bytes');
+      console.log('✅ SENDING RESPONSE NOW...');
+
       res.json(results);
     } catch (error) {
       console.error("Error searching regulatory database:", error);

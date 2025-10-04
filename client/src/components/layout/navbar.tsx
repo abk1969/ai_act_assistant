@@ -89,10 +89,14 @@ export default function Navbar({ onToggleSidebar }: NavbarProps) {
                 <span>Profil</span>
               </DropdownMenuItem>
               <DropdownMenuSeparator />
-              <DropdownMenuItem 
-                onClick={() => logout.mutate()}
+              <DropdownMenuItem
+                onSelect={(e) => {
+                  e.preventDefault();
+                  logout.mutate();
+                }}
                 disabled={logout.isPending}
                 data-testid="menu-logout"
+                className="cursor-pointer"
               >
                 <LogOut className="mr-2 h-4 w-4" />
                 <span>{logout.isPending ? 'Déconnexion...' : 'Se déconnecter'}</span>

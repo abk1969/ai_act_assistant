@@ -66,6 +66,7 @@ export default function RegulatoryDatabase() {
 
   // Calculate active filter from current state (no separate state needed)
   const activeFilter = useMemo(() => {
+    console.log('🔍 Calculating activeFilter:', { searchQuery, selectedRiskCategory });
     if (searchQuery === 'échéance') return 'deadlines';
     if (selectedRiskCategory === 'unacceptable') return 'unacceptable';
     if (selectedRiskCategory === 'high') return 'high';
@@ -94,6 +95,7 @@ export default function RegulatoryDatabase() {
       applicableTo: selectedApplicability !== 'all' ? [selectedApplicability] : undefined,
     }],
     queryFn: async () => {
+      console.log('🔍 FRONTEND - Query parameters:', { searchQuery, selectedRiskCategory, selectedTitle, selectedApplicability });
       const params = new URLSearchParams();
 
       if (searchQuery) params.append('query', searchQuery);
@@ -102,14 +104,22 @@ export default function RegulatoryDatabase() {
       if (selectedApplicability !== 'all') params.append('applicableTo', selectedApplicability);
 
       const url = `/api/regulatory-database/search?${params.toString()}`;
-      console.log('Fetching regulatory data with URL:', url);
+      console.log('🌐 FRONTEND - Fetching regulatory data with URL:', url);
       const res = await fetch(url, { credentials: 'include' });
 
       if (!res.ok) {
         throw new Error(`${res.status}: ${res.statusText}`);
       }
 
-      return res.json();
+      const data = await res.json();
+      console.log('📦 FRONTEND - Received', data.length, 'results from API');
+      console.log('📋 FRONTEND - First 3 articles received:', data.slice(0, 3).map((r: any) => ({
+        article: r.article.articleNumber,
+        riskCategory: r.article.riskCategory
+      })));
+      console.log('📋 FRONTEND - All article numbers received:', data.map((r: any) => r.article.articleNumber).join(', '));
+
+      return data;
     },
     staleTime: 0, // Always refetch when parameters change
     refetchOnMount: true,
@@ -201,7 +211,7 @@ export default function RegulatoryDatabase() {
                 onClick={(e) => {
                   e.preventDefault();
                   e.stopPropagation();
-                  console.log('Click on Articles totaux card');
+                  console.log('🔵 Click on Articles totaux card');
                   setSearchQuery('');
                   setSelectedRiskCategory('all');
                   setSelectedTitle('all');
@@ -231,7 +241,7 @@ export default function RegulatoryDatabase() {
                 onClick={(e) => {
                   e.preventDefault();
                   e.stopPropagation();
-                  console.log('Click on Pratiques interdites card');
+                  console.log('🔴 Click on Pratiques interdites card - Setting riskCategory to unacceptable');
                   setSearchQuery('');
                   setSelectedRiskCategory('unacceptable');
                   setSelectedTitle('all');
@@ -261,7 +271,7 @@ export default function RegulatoryDatabase() {
                 onClick={(e) => {
                   e.preventDefault();
                   e.stopPropagation();
-                  console.log('Click on Systèmes haut risque card');
+                  console.log('🟠 Click on Systèmes haut risque card - Setting riskCategory to high');
                   setSearchQuery('');
                   setSelectedRiskCategory('high');
                   setSelectedTitle('all');
@@ -291,7 +301,7 @@ export default function RegulatoryDatabase() {
                 onClick={(e) => {
                   e.preventDefault();
                   e.stopPropagation();
-                  console.log('Click on Échéances à venir card');
+                  console.log('🟣 Click on Échéances à venir card - Setting searchQuery to échéance');
                   setSearchQuery('échéance');
                   setSelectedRiskCategory('all');
                   setSelectedTitle('all');

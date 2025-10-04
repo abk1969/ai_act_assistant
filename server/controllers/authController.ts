@@ -232,6 +232,7 @@ export class AuthController {
 
   /**
    * Secure logout with session cleanup
+   * Works even if session is expired or invalid
    */
   static async logout(req: Request, res: Response) {
     const startTime = Date.now();
@@ -240,61 +241,84 @@ export class AuthController {
     const ipAddress = req.ip || '127.0.0.1';
 
     try {
-      // Revoke session in our security system
+      // Revoke session in our security system (if exists)
       if (sessionToken) {
-        const { SessionService } = await import('../services/sessionService');
-        await SessionService.revokeSession(sessionToken, 'User logout');
-      }
-
-      // Log security event
-      if (userId) {
-        await auditService.logSecurityEvent({
-          userId,
-          eventType: 'logout',
-          eventDescription: 'User logged out',
-          ipAddress,
-          userAgent: req.get('User-Agent'),
-          isSuccessful: true,
-          sessionId: sessionToken,
-        });
-      }
-
-      req.logout((err) => {
-        if (err) {
-          logger.error('Logout error', err, { userId, ipAddress });
-          return res.status(500).json({ 
-            message: 'Logout failed',
-            code: 'LOGOUT_ERROR'
-          });
+        try {
+          const { SessionService } = await import('../services/sessionService');
+          await SessionService.revokeSession(sessionToken, 'User logout');
+        } catch (error) {
+          // Ignore errors during session revocation
+          logger.warn('Session revocation failed during logout', error as Error);
         }
-        
-        // Optionally regenerate session after logout for extra security
-        req.session.regenerate((regenerateErr) => {
-          if (regenerateErr) {
-            logger.error('Session regeneration after logout error', regenerateErr);
-            // Don't fail the logout if session regeneration fails
-          }
-          
-          logger.info('Logout successful', {
+      }
+
+      // Log security event (if user was authenticated)
+      if (userId) {
+        try {
+          await auditService.logSecurityEvent({
             userId,
+            eventType: 'logout',
+            eventDescription: 'User logged out',
+            ipAddress,
+            userAgent: req.get('User-Agent'),
+            isSuccessful: true,
+            sessionId: sessionToken,
+          });
+        } catch (error) {
+          // Ignore audit logging errors
+          logger.warn('Audit logging failed during logout', error as Error);
+        }
+      }
+
+      // Always destroy the session, even if user is not authenticated
+      if (req.session) {
+        req.session.destroy((err) => {
+          if (err) {
+            logger.error('Session destruction error', err, { userId, ipAddress });
+          }
+
+          // Clear the session cookie
+          res.clearCookie('connect.sid', {
+            path: '/',
+            httpOnly: true,
+            secure: process.env.NODE_ENV === 'production',
+            sameSite: 'lax'
+          });
+
+          logger.info('Logout successful', {
+            userId: userId || 'anonymous',
             ipAddress,
             duration: Date.now() - startTime
           });
 
-          res.json({ 
+          res.json({
             message: 'Logout successful',
             code: 'LOGOUT_SUCCESS'
           });
         });
-      });
+      } else {
+        // No session to destroy, just return success
+        res.json({
+          message: 'Logout successful',
+          code: 'LOGOUT_SUCCESS'
+        });
+      }
     } catch (error) {
       logger.error('Logout error', error as Error, {
-        userId,
+        userId: userId || 'anonymous',
         ipAddress,
         duration: Date.now() - startTime
       });
 
-      res.status(500).json({ 
+      // Even on error, try to clear the session cookie
+      res.clearCookie('connect.sid', {
+        path: '/',
+        httpOnly: true,
+        secure: process.env.NODE_ENV === 'production',
+        sameSite: 'lax'
+      });
+
+      res.status(500).json({
         message: 'Logout failed',
         code: 'LOGOUT_ERROR'
       });

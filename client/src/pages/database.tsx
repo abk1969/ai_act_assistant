@@ -20,6 +20,18 @@ export default function Database() {
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedCategory, setSelectedCategory] = useState("all");
 
+  // Fetch statistics
+  const { data: stats } = useQuery({
+    queryKey: ['/api/ai-act/statistics'],
+    queryFn: async () => {
+      const response = await fetch('/api/ai-act/statistics');
+      if (!response.ok) {
+        throw new Error('Failed to fetch statistics');
+      }
+      return response.json();
+    },
+  });
+
   // Build query URL properly
   const buildQueryUrl = () => {
     const params = new URLSearchParams();
@@ -46,6 +58,19 @@ export default function Database() {
     enabled: true,
   });
 
+  // Get article counts from stats
+  const getArticleCount = (category: string) => {
+    if (!stats?.byRiskCategory) return 0;
+    const categoryMap: Record<string, string> = {
+      'prohibited': 'unacceptable',
+      'high_risk': 'high',
+      'transparency': 'limited',
+      'minimal': 'minimal'
+    };
+    const riskCategory = categoryMap[category] || category;
+    return stats.byRiskCategory[riskCategory] || 0;
+  };
+
   const quickAccessCards = [
     {
       title: "Pratiques interdites",
@@ -53,7 +78,7 @@ export default function Database() {
       icon: Ban,
       iconColor: "text-red-600",
       bgColor: "bg-red-50",
-      articles: "8 articles",
+      count: getArticleCount('prohibited'),
       lastUpdate: "12/07/2024",
       riskLevel: "unacceptable",
       category: "prohibited"
@@ -64,7 +89,7 @@ export default function Database() {
       icon: AlertTriangle,
       iconColor: "text-orange-600",
       bgColor: "bg-orange-50",
-      articles: "24 articles",
+      count: getArticleCount('high_risk'),
       lastUpdate: "Annexe III mise à jour",
       riskLevel: "high",
       category: "high_risk"
@@ -75,7 +100,7 @@ export default function Database() {
       icon: Eye,
       iconColor: "text-blue-600",
       bgColor: "bg-blue-50",
-      articles: "6 articles",
+      count: getArticleCount('transparency'),
       lastUpdate: "Modèles génératifs",
       riskLevel: "limited",
       category: "transparency"
@@ -86,7 +111,7 @@ export default function Database() {
       icon: Shield,
       iconColor: "text-indigo-600",
       bgColor: "bg-indigo-50",
-      articles: "15 articles",
+      count: getArticleCount('governance'),
       lastUpdate: "Comité européen IA",
       riskLevel: "governance",
       category: "governance"
@@ -97,7 +122,7 @@ export default function Database() {
       icon: FileText,
       iconColor: "text-green-600",
       bgColor: "bg-green-50",
-      articles: "12 articles",
+      count: getArticleCount('documentation'),
       lastUpdate: "Templates conformité",
       riskLevel: "documentation",
       category: "documentation"
@@ -108,7 +133,7 @@ export default function Database() {
       icon: Users,
       iconColor: "text-purple-600",
       bgColor: "bg-purple-50",
-      articles: "7 articles",
+      count: getArticleCount('fundamental_rights'),
       lastUpdate: "Guides pratiques",
       riskLevel: "rights",
       category: "fundamental_rights"
@@ -142,12 +167,32 @@ export default function Database() {
   return (
     <div className="p-8" data-testid="page-database">
       <div className="mb-8">
-        <h2 className="text-3xl font-bold text-foreground mb-2">
-          Base réglementaire EU AI Act
-        </h2>
-        <p className="text-muted-foreground">
-          Règlement (UE) 2024/1689 avec recherche avancée
-        </p>
+        <div className="flex items-center justify-between">
+          <div>
+            <h2 className="text-3xl font-bold text-foreground mb-2">
+              Base réglementaire EU AI Act
+            </h2>
+            <p className="text-muted-foreground">
+              Règlement (UE) 2024/1689 • {stats?.totalArticles || 0} Articles • Recherche Intelligente
+            </p>
+          </div>
+          {stats && (
+            <div className="flex items-center gap-6">
+              <div className="text-center">
+                <div className="text-3xl font-bold text-primary">{stats.totalArticles}</div>
+                <div className="text-xs text-muted-foreground">Articles totaux</div>
+              </div>
+              <div className="text-center">
+                <div className="text-2xl font-bold text-red-600">{stats.byRiskCategory?.unacceptable || 0}</div>
+                <div className="text-xs text-muted-foreground">Pratiques interdites</div>
+              </div>
+              <div className="text-center">
+                <div className="text-2xl font-bold text-orange-600">{stats.byRiskCategory?.high || 0}</div>
+                <div className="text-xs text-muted-foreground">Systèmes haut risque</div>
+              </div>
+            </div>
+          )}
+        </div>
       </div>
 
       {/* Search and Filters */}
@@ -207,7 +252,7 @@ export default function Database() {
                 </div>
                 <p className="text-sm text-muted-foreground mb-4">{card.description}</p>
                 <div className="text-xs text-muted-foreground">
-                  <span>{card.articles} • Dernière mise à jour: {card.lastUpdate}</span>
+                  <span>{card.count} article{card.count > 1 ? 's' : ''} • Dernière mise à jour: {card.lastUpdate}</span>
                 </div>
               </CardContent>
             </Card>
