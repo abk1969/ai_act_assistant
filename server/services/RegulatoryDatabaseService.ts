@@ -84,10 +84,18 @@ class RegulatoryDatabaseService {
    */
   async search(filters: SearchFilters): Promise<SearchResult[]> {
     let results = [...this.articles];
+    console.log('🔍 Search filters received:', JSON.stringify(filters, null, 2));
+    console.log('📊 Total articles before filtering:', results.length);
 
     // Apply filters
     if (filters.riskCategory) {
+      console.log('🎯 Filtering by riskCategory:', filters.riskCategory);
+      console.log('📋 Sample article riskCategories:', results.slice(0, 5).map(a => ({
+        article: a.articleNumber,
+        riskCategory: a.riskCategory
+      })));
       results = results.filter(a => a.riskCategory === filters.riskCategory);
+      console.log('✅ Articles after riskCategory filter:', results.length);
     }
 
     if (filters.titleNumber) {
