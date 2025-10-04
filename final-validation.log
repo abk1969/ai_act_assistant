@@ -1,0 +1,33 @@
+
+🔍 ====== AUDIT COMPLET - MODULE VEILLE RÉGLEMENTAIRE ======
+
+📊 Test 1: Vérification statut système...
+[0;32m✅ Status endpoint OK[0m
+   Response: {"lastSync":"2025-10-04T19:31:43.718Z","totalUpdates":231,"criticalAlerts":10,"sourceStatus":[{"name...
+
+📰 Test 2: Récupération mises à jour réglementaires...
+[0;32m✅ Updates endpoint OK[0m
+
+🔄 Test 3: Synchronisation multi-agents (peut prendre 30-60s)...
+[0;32m✅ Sync workflow OK (durée: 6s)[0m
+   Response: {"newUpdates":0,"updatedSources":["eurlex","cnil","ec-ai-office"],"errors":[]}
+
+🔍 Test 4: Filtrage par source...
+[0;32m✅ Filter by source OK[0m
+[0;32m✅ Filter by source OK[0m
+[0;32m✅ Filter by source OK[0m
+
+⚠️  Test 5: Filtrage par sévérité...
+[0;32m✅ Filter by severity 'critique' OK[0m
+[0;32m✅ Filter by severity 'important' OK[0m
+[0;32m✅ Filter by severity 'info' OK[0m
+
+
+📊 ====== RÉSUMÉ DES TESTS ======
+
+test-regulatory.sh: line 112: bc: command not found
+[0;32m✅ PASS: 9[0m
+[0;31m❌ FAIL: 0[0m
+📈 Taux de réussite: %
+
+[0;32m🎉 Tous les tests sont passés ![0m

@@ -1,0 +1,60 @@
+
+🔍 ====== AUDIT COMPLET - MODULE VEILLE RÉGLEMENTAIRE ======
+
+📊 Test 1: Vérification statut système...
+❌ Status endpoint error: connect ECONNREFUSED ::1:5000
+
+📰 Test 2: Récupération mises à jour réglementaires...
+❌ Updates endpoint error: connect ECONNREFUSED ::1:5000
+
+🔄 Test 3: Synchronisation multi-agents (peut prendre 30-60s)...
+❌ Sync error: connect ECONNREFUSED ::1:5000
+
+🔍 Test 4: Filtrage par source...
+❌ Filter by "Commission Européenne" error: connect ECONNREFUSED ::1:5000
+❌ Filter by "CNIL" error: connect ECONNREFUSED ::1:5000
+❌ Filter by "AI Office" error: connect ECONNREFUSED ::1:5000
+
+⚠️  Test 5: Filtrage par sévérité...
+❌ Filter by "critique" error: connect ECONNREFUSED ::1:5000
+❌ Filter by "important" error: connect ECONNREFUSED ::1:5000
+❌ Filter by "info" error: connect ECONNREFUSED ::1:5000
+
+💾 Test 6: Vérification persistence base de données...
+❌ Persistence test error: connect ECONNREFUSED ::1:5000
+
+
+📊 ====== RÉSUMÉ DES TESTS ======
+
+✅ PASS: 0
+⚠️  PARTIAL: 0
+❌ FAIL: 0
+💥 ERROR: 10
+
+📈 Taux de réussite: 0.0%
+
+📋 Détails par test:
+
+1. 💥 Status API: ERROR
+   Error: connect ECONNREFUSED ::1:5000
+2. 💥 Get Updates API: ERROR
+   Error: connect ECONNREFUSED ::1:5000
+3. 💥 Multi-Agent Sync: ERROR
+   Error: connect ECONNREFUSED ::1:5000
+4. 💥 Filter by Commission Européenne: ERROR
+   Error: connect ECONNREFUSED ::1:5000
+5. 💥 Filter by CNIL: ERROR
+   Error: connect ECONNREFUSED ::1:5000
+6. 💥 Filter by AI Office: ERROR
+   Error: connect ECONNREFUSED ::1:5000
+7. 💥 Filter by critique: ERROR
+   Error: connect ECONNREFUSED ::1:5000
+8. 💥 Filter by important: ERROR
+   Error: connect ECONNREFUSED ::1:5000
+9. 💥 Filter by info: ERROR
+   Error: connect ECONNREFUSED ::1:5000
+10. 💥 Database Persistence: ERROR
+   Error: connect ECONNREFUSED ::1:5000
+
+✅ Audit terminé
+
