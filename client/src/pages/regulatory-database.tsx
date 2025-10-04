@@ -169,7 +169,10 @@ export default function RegulatoryDatabase() {
             <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
               <div
                 className="cursor-pointer"
-                onClick={() => {
+                onClick={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  console.log('Click on Articles totaux card');
                   setSearchQuery('');
                   setSelectedRiskCategory('all');
                   setSelectedTitle('all');
@@ -193,7 +196,10 @@ export default function RegulatoryDatabase() {
               </div>
               <div
                 className="cursor-pointer"
-                onClick={() => {
+                onClick={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  console.log('Click on Pratiques interdites card');
                   setSearchQuery('');
                   setSelectedRiskCategory('unacceptable');
                   setSelectedTitle('all');
@@ -217,7 +223,10 @@ export default function RegulatoryDatabase() {
               </div>
               <div
                 className="cursor-pointer"
-                onClick={() => {
+                onClick={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  console.log('Click on Systèmes haut risque card');
                   setSearchQuery('');
                   setSelectedRiskCategory('high');
                   setSelectedTitle('all');
@@ -241,7 +250,10 @@ export default function RegulatoryDatabase() {
               </div>
               <div
                 className="cursor-pointer"
-                onClick={() => {
+                onClick={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  console.log('Click on Échéances à venir card');
                   setSearchQuery('échéance');
                   setSelectedRiskCategory('all');
                   setSelectedTitle('all');
