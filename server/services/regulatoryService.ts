@@ -15,6 +15,9 @@ export interface RegulatorySource {
   checkFrequency: 'hourly' | 'daily' | 'weekly';
 }
 
+// Track last sync time in memory (in production, should be in database)
+let lastSyncTimestamp: Date | null = null;
+
 class RegulatoryService {
   private sources: RegulatorySource[] = [
     {
@@ -175,7 +178,7 @@ class RegulatoryService {
     }));
 
     return {
-      lastSync: updates[0]?.publishedAt || new Date(),
+      lastSync: lastSyncTimestamp || new Date(),
       totalUpdates: updates.length,
       criticalAlerts: criticalUpdates.length,
       sourceStatus
@@ -201,6 +204,9 @@ class RegulatoryService {
     console.log('\n🔄 Starting intelligent regulatory sync...\n');
 
     try {
+      // Update last sync timestamp
+      lastSyncTimestamp = new Date();
+
       // Execute multi-agent workflow
       const workflowResult = await regulatoryWorkflow.execute({
         daysBack: 7,

@@ -59,7 +59,8 @@ export class CNILMCPServer {
 
       const response = await axios.get(newsUrl, {
         headers: {
-          'User-Agent': 'AI-Act-Navigator/1.0 (Compliance Monitoring)',
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+          'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
         },
         timeout: 30000,
       });
@@ -67,26 +68,26 @@ export class CNILMCPServer {
       const $ = cheerio.load(response.data);
       const results: RawRegulatoryData[] = [];
 
-      // Parse news items
-      $('.node--type-actualite, .node--type-article').slice(0, limit).each((_, element) => {
+      // Parse items from the view container
+      $('.view .views-row').slice(0, limit).each((_, element) => {
         const $el = $(element);
         const title = $el.find('h2, h3').first().text().trim();
-        const url = $el.find('a').first().attr('href') || '';
-        const summary = $el.find('.field--name-field-summary, .summary').text().trim();
-        const dateStr = $el.find('.date-display-single, time').first().text().trim();
+        const link = $el.find('a').first().attr('href') || '';
+        const summary = $el.find('p, .description, .summary').first().text().trim();
 
-        if (title && url) {
+        if (title && link && title.length > 10) {
           results.push({
-            sourceId: 'cnil',
+            sourceId: `cnil-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
             source: 'CNIL',
-            url: url.startsWith('http') ? url : `https://www.cnil.fr${url}`,
+            url: link.startsWith('http') ? link : `https://www.cnil.fr${link}`,
             title,
-            rawContent: summary,
-            publishedDate: this.parseDate(dateStr),
+            rawContent: summary || `Recommandation CNIL: ${title}`,
+            publishedDate: new Date(), // CNIL doesn't show dates on listing page
             documentType: 'guidance',
             language: 'FR',
             metadata: {
               keywords: ['CNIL', 'protection des données', 'IA'],
+              source: 'cnil-ai-page',
             },
           });
         }
@@ -101,7 +102,7 @@ export class CNILMCPServer {
 
   async getCNILRecommendations(topic?: string): Promise<RawRegulatoryData[]> {
     try {
-      // Use the main AI page instead of search which may be rate-limited
+      // Same source as news - CNIL doesn't separate recommendations from news on their AI page
       const aiPageUrl = 'https://www.cnil.fr/fr/intelligence-artificielle';
 
       const response = await axios.get(aiPageUrl, {
@@ -115,31 +116,37 @@ export class CNILMCPServer {
       const $ = cheerio.load(response.data);
       const results: RawRegulatoryData[] = [];
 
-      // Parse recommendations and guidelines from the AI page
-      $('.node--type-recommandation, .node--type-guide, article').slice(0, 5).each((_, element) => {
+      // Parse items from the view container
+      $('.view .views-row').slice(0, 5).each((_, element) => {
         const $el = $(element);
-        const title = $el.find('h2, h3, .title').first().text().trim();
-        const url = $el.find('a').first().attr('href') || '';
-        const content = $el.find('.summary, .description, p').first().text().trim();
-        const dateStr = $el.find('.date, time').first().text().trim();
+        const title = $el.find('h2, h3').first().text().trim();
+        const link = $el.find('a').first().attr('href') || '';
+        const content = $el.find('p, .description, .summary').first().text().trim();
 
         // Filter by topic if provided
         const matchesTopic = !topic ||
           title.toLowerCase().includes(topic.toLowerCase()) ||
           content.toLowerCase().includes(topic.toLowerCase());
 
-        if (title && url && matchesTopic && title.length > 10) {
+        // Only include items with "recommandation" or "guide" in title
+        const isRecommendation =
+          title.toLowerCase().includes('recommandation') ||
+          title.toLowerCase().includes('guide') ||
+          title.toLowerCase().includes('garantir');
+
+        if (title && link && matchesTopic && isRecommendation && title.length > 10) {
           results.push({
-            sourceId: 'cnil',
+            sourceId: `cnil-rec-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
             source: 'CNIL',
-            url: url.startsWith('http') ? url : `https://www.cnil.fr${url}`,
+            url: link.startsWith('http') ? link : `https://www.cnil.fr${link}`,
             title,
-            rawContent: content || 'Recommandation CNIL sur l\'intelligence artificielle',
-            publishedDate: this.parseDate(dateStr),
+            rawContent: content || `Recommandation CNIL: ${title}`,
+            publishedDate: new Date(),
             documentType: 'guidance',
             language: 'FR',
             metadata: {
-              keywords: topic ? [topic, 'CNIL', 'IA'] : ['CNIL', 'IA'],
+              keywords: topic ? [topic, 'CNIL', 'IA', 'recommandation'] : ['CNIL', 'IA', 'recommandation'],
+              source: 'cnil-recommendations',
             },
           });
         }
@@ -155,8 +162,7 @@ export class CNILMCPServer {
 
   async checkCNILSanctions(daysBack: number = 30): Promise<RawRegulatoryData[]> {
     try {
-      // Alternative: Check from the main news/AI page for any sanction mentions
-      // The dedicated sanctions page may have changed URL
+      // Check the AI page for sanction mentions
       const aiNewsUrl = 'https://www.cnil.fr/fr/intelligence-artificielle';
 
       const response = await axios.get(aiNewsUrl, {
@@ -169,42 +175,35 @@ export class CNILMCPServer {
 
       const $ = cheerio.load(response.data);
       const results: RawRegulatoryData[] = [];
-      const cutoffDate = new Date();
-      cutoffDate.setDate(cutoffDate.getDate() - daysBack);
 
-      // Look for sanction-related articles
-      $('.node--type-actualite, .node--type-article, article').each((_, element) => {
+      // Look for sanction-related items in the views
+      $('.view .views-row').each((_, element) => {
         const $el = $(element);
-        const title = $el.find('h2, h3, .title').text().trim();
-        const url = $el.find('a').attr('href') || '';
-        const content = $el.find('.summary, .description, p').first().text().trim();
-        const dateStr = $el.find('.date, time').text().trim();
-        const publishedDate = this.parseDate(dateStr);
+        const title = $el.find('h2, h3').first().text().trim();
+        const link = $el.find('a').first().attr('href') || '';
+        const content = $el.find('p, .description, .summary').first().text().trim();
 
-        // Filter by sanction-related content and date
+        // Filter by sanction-related content
         const isSanctionRelated =
           title.toLowerCase().includes('sanction') ||
           title.toLowerCase().includes('amende') ||
           title.toLowerCase().includes('condamnation') ||
+          title.toLowerCase().includes('mise en demeure') ||
           content.toLowerCase().includes('sanction');
 
-        const isAIRelated =
-          title.toLowerCase().includes('intelligence artificielle') ||
-          title.toLowerCase().includes('ia ') ||
-          content.toLowerCase().includes('intelligence artificielle');
-
-        if (title && url && isSanctionRelated && isAIRelated && publishedDate >= cutoffDate) {
+        if (title && link && isSanctionRelated && title.length > 10) {
           results.push({
-            sourceId: 'cnil',
+            sourceId: `cnil-sanction-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
             source: 'CNIL',
-            url: url.startsWith('http') ? url : `https://www.cnil.fr${url}`,
+            url: link.startsWith('http') ? link : `https://www.cnil.fr${link}`,
             title,
-            rawContent: content || 'Sanction CNIL liée à l\'intelligence artificielle',
-            publishedDate,
+            rawContent: content || `Sanction CNIL: ${title}`,
+            publishedDate: new Date(), // CNIL doesn't show dates on listing
             documentType: 'decision',
             language: 'FR',
             metadata: {
               keywords: ['sanction', 'IA', 'CNIL'],
+              source: 'cnil-sanctions',
             },
           });
         }
