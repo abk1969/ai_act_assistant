@@ -195,8 +195,9 @@ class RegulatoryService {
   /**
    * Synchronisation réglementaire intelligente
    * Utilise le workflow multi-agents pour collecter, analyser et synthétiser
+   * @param userId - ID de l'utilisateur pour utiliser ses paramètres LLM
    */
-  async performRegulatorySync(): Promise<{
+  async performRegulatorySync(userId: string): Promise<{
     newUpdates: number;
     updatedSources: string[];
     errors: string[];
@@ -207,11 +208,12 @@ class RegulatoryService {
       // Update last sync timestamp
       lastSyncTimestamp = new Date();
 
-      // Execute multi-agent workflow
+      // Execute multi-agent workflow with user's LLM settings
       const workflowResult = await regulatoryWorkflow.execute({
         daysBack: 7,
         sources: ['eurlex', 'cnil', 'ec-ai-office'],
         minRelevanceScore: 60,
+        userId, // Pass userId to workflow for LLM configuration
       });
 
       const successfulSources = Object.entries(workflowResult.metrics.sourceStatus)

@@ -26,6 +26,7 @@ export class RegulatoryMonitoringWorkflow {
     daysBack?: number;
     sources?: string[];
     minRelevanceScore?: number;
+    userId?: string; // User ID for LLM configuration
   }): Promise<WorkflowResult> {
     const startTime = Date.now();
 
@@ -55,9 +56,12 @@ export class RegulatoryMonitoringWorkflow {
       };
     }
 
-    // STEP 2: Analysis
+    // STEP 2: Analysis (using user's LLM settings if userId provided)
     console.log('🔬 STEP 2/3: Analyzing relevance and impact...');
-    const analyzedUpdates = await analyzerAgent.analyzeUpdates(collectionResult.updates);
+    const analyzedUpdates = await analyzerAgent.analyzeUpdates(
+      collectionResult.updates,
+      params.userId
+    );
 
     // Filter by minimum relevance score
     const minScore = params.minRelevanceScore || 50;
@@ -83,9 +87,12 @@ export class RegulatoryMonitoringWorkflow {
       };
     }
 
-    // STEP 3: Classification & Synthesis
+    // STEP 3: Classification & Synthesis (using user's LLM settings if userId provided)
     console.log('🏷️ STEP 3/3: Classifying and generating insights...');
-    const insights = await classifierSynthesizerAgent.classifyAndSynthesize(relevantUpdates);
+    const insights = await classifierSynthesizerAgent.classifyAndSynthesize(
+      relevantUpdates,
+      params.userId
+    );
 
     console.log(`   ✅ Generated ${insights.length} actionable insights\n`);
 

@@ -5,6 +5,7 @@
 
 import { ChatGoogleGenerativeAI } from '@langchain/google-genai';
 import { ChatAnthropic } from '@langchain/anthropic';
+import { ChatOpenAI } from '@langchain/openai';
 import { PromptTemplate } from '@langchain/core/prompts';
 import {
   AnalyzedUpdate,
@@ -14,10 +15,12 @@ import {
   Action,
   ChecklistItem
 } from '../types/regulatory-monitoring';
+import { storage } from '../storage';
 
 export class ClassifierSynthesizerAgent {
   private claudeModel: ChatAnthropic | null = null;
   private geminiModel: ChatGoogleGenerativeAI | null = null;
+  private openaiModel: ChatOpenAI | null = null;
 
   private agentCard: AgentCard = {
     agent_id: 'regulatory-classifier-synthesizer-001',
@@ -77,8 +80,71 @@ export class ClassifierSynthesizerAgent {
     }
   }
 
-  async classifyAndSynthesize(analyzedUpdates: AnalyzedUpdate[]): Promise<RegulatoryInsight[]> {
+  /**
+   * Initialize models based on user's LLM settings
+   */
+  private async initializeUserModels(userId?: string) {
+    if (!userId) {
+      // No user ID, use default models from environment
+      return;
+    }
+
+    try {
+      const settings = await storage.getActiveLlmSettings(userId);
+      if (!settings || !settings.apiKey) {
+        console.warn('⚠️ No active LLM settings for user, using default models');
+        return;
+      }
+
+      const provider = settings.provider.toLowerCase();
+      const temperature = (settings.temperature || 30) / 100;
+      const modelName = settings.model;
+
+      console.log(`🔧 Initializing ${provider} model for classification/synthesis (user ${userId})`);
+
+      switch (provider) {
+        case 'openai':
+          this.openaiModel = new ChatOpenAI({
+            apiKey: settings.apiKey,
+            modelName: modelName || 'gpt-4-turbo-preview',
+            temperature,
+          });
+          console.log(`✅ OpenAI model ${modelName} initialized`);
+          break;
+
+        case 'google':
+        case 'gemini':
+          this.geminiModel = new ChatGoogleGenerativeAI({
+            apiKey: settings.apiKey,
+            modelName: modelName || 'gemini-2.0-flash-exp',
+            temperature,
+          });
+          console.log(`✅ Gemini model ${modelName} initialized`);
+          break;
+
+        case 'anthropic':
+          this.claudeModel = new ChatAnthropic({
+            apiKey: settings.apiKey,
+            modelName: modelName || 'claude-3-7-sonnet-20250219',
+            temperature,
+          });
+          console.log(`✅ Claude model ${modelName} initialized`);
+          break;
+
+        default:
+          console.warn(`⚠️ Unsupported provider ${provider}, using default models`);
+      }
+    } catch (error) {
+      console.error('❌ Error initializing user models:', error);
+    }
+  }
+
+  async classifyAndSynthesize(analyzedUpdates: AnalyzedUpdate[], userId?: string): Promise<RegulatoryInsight[]> {
     console.log(`🏷️ Classifying and synthesizing ${analyzedUpdates.length} updates...`);
+
+    // Initialize models based on user settings
+    await this.initializeUserModels(userId);
+
     const insights: RegulatoryInsight[] = [];
 
     for (const analyzed of analyzedUpdates) {

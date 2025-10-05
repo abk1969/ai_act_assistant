@@ -676,9 +676,13 @@ Le registre doit contenir:
     }
   });
 
-  app.post('/api/regulatory/sync', async (req, res) => {
+  app.post('/api/regulatory/sync', basicAuth, async (req: any, res) => {
     try {
-      const result = await regulatoryService.performRegulatorySync();
+      const userId = req.user?.id;
+      if (!userId) {
+        return res.status(401).json({ message: "User not authenticated" });
+      }
+      const result = await regulatoryService.performRegulatorySync(userId);
       res.json(result);
     } catch (error) {
       console.error("Error performing regulatory sync:", error);
