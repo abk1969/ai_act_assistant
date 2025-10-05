@@ -639,16 +639,20 @@ Le registre doit contenir:
   app.get('/api/regulatory/updates', async (req, res) => {
     try {
       const { limit, source, severity } = req.query;
-      
+
       let updates;
-      if (source) {
-        updates = await regulatoryService.getUpdatesBySource(source as string, parseInt(limit as string) || 20);
-      } else if (severity) {
-        updates = await regulatoryService.getUpdatesBySeverity(severity as string, parseInt(limit as string) || 20);
+      // Handle "all" filter values - treat as no filter
+      const effectiveSource = source && source !== 'all' ? source as string : undefined;
+      const effectiveSeverity = severity && severity !== 'all' ? severity as string : undefined;
+
+      if (effectiveSource) {
+        updates = await regulatoryService.getUpdatesBySource(effectiveSource, parseInt(limit as string) || 20);
+      } else if (effectiveSeverity) {
+        updates = await regulatoryService.getUpdatesBySeverity(effectiveSeverity, parseInt(limit as string) || 20);
       } else {
         updates = await regulatoryService.getRegulatoryUpdates(parseInt(limit as string) || 50);
       }
-      
+
       res.json(updates);
     } catch (error) {
       console.error("Error fetching regulatory updates:", error);
@@ -687,6 +691,164 @@ Le registre doit contenir:
     } catch (error) {
       console.error("Error performing regulatory sync:", error);
       res.status(500).json({ message: "Failed to perform regulatory sync" });
+    }
+  });
+
+  // ===== NOUVELLES ROUTES POUR LA VEILLE PROACTIVE =====
+
+  /**
+   * Synchronisation personnalisée avec workflow étendu
+   */
+  app.post('/api/regulatory/sync-personalized', basicAuth, async (req: any, res) => {
+    try {
+      const userId = req.user?.id;
+      if (!userId) {
+        return res.status(401).json({ message: "User not authenticated" });
+      }
+
+      const { daysBack, sources, minRelevanceScore } = req.body;
+
+      // Utiliser le workflow étendu avec personnalisation
+      const { regulatoryWorkflow } = await import('./workflows/regulatory-monitoring-workflow');
+      const result = await regulatoryWorkflow.executeEnhanced({
+        daysBack: daysBack || 7,
+        sources: sources || ['eurlex', 'cnil', 'ec-ai-office'],
+        minRelevanceScore: minRelevanceScore || 60,
+        userId,
+      });
+
+      res.json({
+        success: true,
+        actionableInsights: result.actionableInsights.length,
+        totalActions: result.metrics.personalizationMetrics.totalActionsGenerated,
+        averageRelevance: result.metrics.personalizationMetrics.averageRelevanceScore,
+        executionTime: result.metrics.executionTime,
+      });
+    } catch (error) {
+      console.error("Error performing personalized regulatory sync:", error);
+      res.status(500).json({ message: "Failed to perform personalized sync" });
+    }
+  });
+
+  /**
+   * Récupère les mises à jour personnalisées pour un utilisateur
+   */
+  app.get('/api/regulatory/personalized-updates/:userId', basicAuth, async (req: any, res) => {
+    try {
+      const { userId } = req.params;
+      const requestingUserId = req.user?.id;
+
+      // Vérifier que l'utilisateur peut accéder à ces données
+      if (requestingUserId !== userId) {
+        return res.status(403).json({ message: "Access denied" });
+      }
+
+      const { limit = 20, urgencyLevel, category } = req.query;
+
+      // Pour l'instant, récupérer les mises à jour standard et les enrichir
+      // TODO: Implémenter la récupération depuis une table dédiée aux insights actionnables
+      const { storage } = await import('./storage');
+      const updates = await storage.getRegulatoryUpdates(parseInt(limit as string));
+
+      // Simuler la personnalisation (à remplacer par la vraie logique)
+      const personalizedUpdates = updates.map(update => ({
+        ...update,
+        userContext: {
+          relevanceScore: Math.floor(Math.random() * 40) + 60, // 60-100
+          urgencyLevel: ['immediate', 'high', 'medium', 'low'][Math.floor(Math.random() * 4)],
+          estimatedImpact: Math.floor(Math.random() * 50) + 50, // 50-100
+          impactedSystemsCount: Math.floor(Math.random() * 3) + 1,
+        },
+        actionPlan: {
+          priorityActionsCount: Math.floor(Math.random() * 5) + 1,
+          estimatedEffort: ['1 jour', '3 jours', '1 semaine', '2 semaines'][Math.floor(Math.random() * 4)],
+          budgetImpact: ['Faible', 'Modéré', 'Élevé'][Math.floor(Math.random() * 3)],
+        },
+      }));
+
+      res.json(personalizedUpdates);
+    } catch (error) {
+      console.error("Error fetching personalized updates:", error);
+      res.status(500).json({ message: "Failed to fetch personalized updates" });
+    }
+  });
+
+  /**
+   * Génère un plan d'actions pour un insight spécifique
+   */
+  app.get('/api/regulatory/action-plan/:userId/:insightId', basicAuth, async (req: any, res) => {
+    try {
+      const { userId, insightId } = req.params;
+      const requestingUserId = req.user?.id;
+
+      if (requestingUserId !== userId) {
+        return res.status(403).json({ message: "Access denied" });
+      }
+
+      // TODO: Récupérer le plan d'actions depuis la base de données
+      // Pour l'instant, retourner un plan simulé
+      const actionPlan = {
+        insightId,
+        priorityActions: [
+          {
+            id: 'action-1',
+            description: 'Réviser la documentation technique du système IA',
+            priority: 'high',
+            deadline: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
+            estimatedHours: 16,
+            category: 'documentation',
+            impactLevel: 'medium',
+          },
+          {
+            id: 'action-2',
+            description: 'Effectuer un audit de conformité',
+            priority: 'urgent',
+            deadline: new Date(Date.now() + 15 * 24 * 60 * 60 * 1000),
+            estimatedHours: 24,
+            category: 'compliance',
+            impactLevel: 'high',
+          },
+        ],
+        timeline: {
+          immediate: 1,
+          short_term: 1,
+          medium_term: 0,
+          long_term: 0,
+        },
+        estimatedEffort: '5 jours (40h)',
+        budgetImpact: 'Modéré (5-20k€)',
+      };
+
+      res.json(actionPlan);
+    } catch (error) {
+      console.error("Error generating action plan:", error);
+      res.status(500).json({ message: "Failed to generate action plan" });
+    }
+  });
+
+  /**
+   * Dashboard d'impact personnalisé
+   */
+  app.get('/api/regulatory/impact-dashboard/:userId', basicAuth, async (req: any, res) => {
+    try {
+      const { userId } = req.params;
+      const requestingUserId = req.user?.id;
+
+      if (requestingUserId !== userId) {
+        return res.status(403).json({ message: "Access denied" });
+      }
+
+      const { regulatoryWorkflow } = await import('./workflows/regulatory-monitoring-workflow');
+      const dashboard = await regulatoryWorkflow.generateImpactDashboard(userId);
+
+      if (!dashboard) {
+        return res.status(500).json({ message: "Failed to generate dashboard" });
+      }
+
+      res.json(dashboard);
+    } catch (error) {
+      console.error("Error generating impact dashboard:", error);
+      res.status(500).json({ message: "Failed to generate impact dashboard" });
     }
   });
 
