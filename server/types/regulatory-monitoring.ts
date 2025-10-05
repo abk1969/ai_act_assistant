@@ -174,3 +174,158 @@ export interface MonitoringMetrics {
   processingLatency: number; // milliseconds
   errorRate: number; // percentage
 }
+
+// ===== NOUVEAUX TYPES POUR LA VEILLE PROACTIVE =====
+
+/**
+ * Insight réglementaire personnalisé avec contexte utilisateur
+ */
+export interface PersonalizedRegulatoryInsight extends RegulatoryInsight {
+  userContext: {
+    impactedSystems: import('@shared/schema').AiSystem[];
+    relevanceScore: number; // 0-100 personnalisé
+    urgencyLevel: 'immediate' | 'high' | 'medium' | 'low';
+    maturityGaps: string[];
+    complianceGaps: string[];
+    estimatedImpact: number; // 0-100
+    riskAmplification: number; // Facteur d'amplification du risque
+  };
+}
+
+/**
+ * Insight réglementaire avec plan d'actions concret
+ */
+export interface ActionableRegulatoryInsight extends PersonalizedRegulatoryInsight {
+  actionPlan: {
+    priorityActions: PersonalizedAction[];
+    systemSpecificActions: Record<string, PersonalizedAction[]>;
+    complianceChecklist: PersonalizedChecklistItem[];
+    timeline: ActionTimeline;
+    estimatedEffort: string;
+    budgetImpact?: string;
+    riskMitigation: RiskMitigationPlan;
+  };
+}
+
+/**
+ * Action personnalisée avec détails d'exécution
+ */
+export interface PersonalizedAction extends Action {
+  systemId?: string;
+  systemName?: string;
+  impactLevel: 'critical' | 'high' | 'medium' | 'low';
+  estimatedHours?: number;
+  requiredSkills?: string[];
+  dependencies?: string[];
+  category: 'compliance' | 'documentation' | 'technical' | 'governance' | 'training';
+  dueDate?: Date;
+  owner?: string;
+  resources?: string[];
+}
+
+/**
+ * Item de checklist personnalisé
+ */
+export interface PersonalizedChecklistItem extends ChecklistItem {
+  systemId?: string;
+  systemName?: string;
+  category: 'immediate' | 'short_term' | 'medium_term' | 'long_term';
+  estimatedHours?: number;
+  prerequisites?: string[];
+  validationCriteria?: string[];
+}
+
+/**
+ * Timeline des actions par période
+ */
+export interface ActionTimeline {
+  immediate: PersonalizedAction[]; // 0-30 jours
+  short_term: PersonalizedAction[]; // 1-3 mois
+  medium_term: PersonalizedAction[]; // 3-6 mois
+  long_term: PersonalizedAction[]; // 6+ mois
+}
+
+/**
+ * Plan de mitigation des risques
+ */
+export interface RiskMitigationPlan {
+  identifiedRisks: string[];
+  mitigationActions: PersonalizedAction[];
+  contingencyPlans: string[];
+  monitoringRequirements: string[];
+}
+
+/**
+ * Contexte utilisateur pour personnalisation
+ */
+export interface UserContext {
+  userId: string;
+  aiSystems: import('@shared/schema').AiSystem[];
+  maturityAssessment?: import('@shared/schema').MaturityAssessment;
+  complianceRecords: import('@shared/schema').ComplianceRecord[];
+  organizationProfile: {
+    sector?: string;
+    maturityLevel: string;
+    riskTolerance: 'low' | 'medium' | 'high';
+    complianceScore: number;
+  };
+}
+
+/**
+ * Résultat du workflow étendu avec personnalisation
+ */
+export interface EnhancedWorkflowResult {
+  actionableInsights: ActionableRegulatoryInsight[];
+  metrics: {
+    totalCollected: number;
+    totalAnalyzed: number;
+    totalPersonalized: number;
+    totalActionable: number;
+    sourceStatus: Record<string, { success: boolean; count: number; error?: string }>;
+    executionTime: number;
+    timestamp: Date;
+    personalizationMetrics: {
+      averageRelevanceScore: number;
+      highUrgencyCount: number;
+      totalActionsGenerated: number;
+      averageActionsPerInsight: number;
+    };
+  };
+}
+
+/**
+ * Dashboard d'impact personnalisé
+ */
+export interface ImpactDashboard {
+  userId: string;
+  summary: {
+    totalInsights: number;
+    highPriorityActions: number;
+    impactedSystems: number;
+    urgentDeadlines: number;
+    complianceGaps: number;
+    estimatedEffort: string;
+  };
+  riskAnalysis: {
+    riskAmplificationFactor: number;
+    criticalSystems: import('@shared/schema').AiSystem[];
+    riskTrends: {
+      increasing: number;
+      stable: number;
+      decreasing: number;
+    };
+  };
+  actionBreakdown: {
+    byCategory: Record<PersonalizedAction['category'], number>;
+    byPriority: Record<PersonalizedAction['priority'], number>;
+    byTimeline: Record<keyof ActionTimeline, number>;
+  };
+  complianceStatus: {
+    overallScore: number;
+    gapsBySystem: Record<string, string[]>;
+    upcomingDeadlines: Array<{
+      action: PersonalizedAction;
+      daysRemaining: number;
+    }>;
+  };
+}

@@ -1,6 +1,10 @@
 # AI Act Navigator - Debug Dockerfile
 FROM node:20-alpine
 
+# Cache bust argument to force rebuild
+ARG CACHE_BUST=default
+RUN echo "Cache bust: $CACHE_BUST"
+
 WORKDIR /app
 
 # Install system dependencies
@@ -12,11 +16,22 @@ COPY package*.json ./
 # Install dependencies
 RUN npm ci
 
+# Force cache invalidation with timestamp
+RUN echo "Build timestamp: $(date)" > /tmp/build-timestamp
+
 # Copy source code
 COPY . .
 
+# Clean any existing build
+RUN rm -rf dist/
+
 # Build frontend only (not the server bundle)
 RUN npm run build:frontend
+
+# Verify build contains our modifications
+RUN echo "Verifying build..." && \
+    ls -la dist/public/assets/ && \
+    echo "Build verification complete"
 
 # Expose port
 EXPOSE 5000

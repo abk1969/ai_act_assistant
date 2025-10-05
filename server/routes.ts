@@ -731,16 +731,14 @@ Le registre doit contenir:
   });
 
   /**
-   * Récupère les mises à jour personnalisées pour un utilisateur
+   * Récupère les mises à jour personnalisées pour l'utilisateur authentifié
    */
-  app.get('/api/regulatory/personalized-updates/:userId', basicAuth, async (req: any, res) => {
+  app.get('/api/regulatory/personalized-updates', basicAuth, async (req: any, res) => {
     try {
-      const { userId } = req.params;
-      const requestingUserId = req.user?.id;
+      const userId = req.user?.id;
 
-      // Vérifier que l'utilisateur peut accéder à ces données
-      if (requestingUserId !== userId) {
-        return res.status(403).json({ message: "Access denied" });
+      if (!userId) {
+        return res.status(401).json({ message: "User not authenticated" });
       }
 
       const { limit = 20, urgencyLevel, category } = req.query;
@@ -827,15 +825,14 @@ Le registre doit contenir:
   });
 
   /**
-   * Dashboard d'impact personnalisé
+   * Dashboard d'impact personnalisé pour l'utilisateur authentifié
    */
-  app.get('/api/regulatory/impact-dashboard/:userId', basicAuth, async (req: any, res) => {
+  app.get('/api/regulatory/impact-dashboard', basicAuth, async (req: any, res) => {
     try {
-      const { userId } = req.params;
-      const requestingUserId = req.user?.id;
+      const userId = req.user?.id;
 
-      if (requestingUserId !== userId) {
-        return res.status(403).json({ message: "Access denied" });
+      if (!userId) {
+        return res.status(401).json({ message: "User not authenticated" });
       }
 
       const { regulatoryWorkflow } = await import('./workflows/regulatory-monitoring-workflow');

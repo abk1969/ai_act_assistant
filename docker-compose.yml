@@ -30,6 +30,8 @@ services:
     build:
       context: .
       dockerfile: Dockerfile.debug
+      args:
+        CACHE_BUST: "clickable-cards-fix-2025-01-05"
     container_name: ai-act-navigator
     environment:
       NODE_ENV: production
