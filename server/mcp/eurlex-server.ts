@@ -4,60 +4,62 @@
  */
 
 import { MCPServerConfig, MCPTool, RawRegulatoryData } from '../types/regulatory-monitoring';
-import axios from 'axios';
+import { BaseMCPServer } from './BaseMCPServer';
 import * as cheerio from 'cheerio';
 
-export class EURLexMCPServer {
-  private config: MCPServerConfig = {
-    name: 'eurlex-ai-act-monitor',
-    version: '1.0.0',
-    description: 'MCP Server for EUR-Lex AI Act monitoring',
-    endpoint: 'https://eur-lex.europa.eu',
-    capabilities: {
-      resources: true,
-      tools: true,
-      prompts: false,
-    },
-    tools: [
-      {
-        name: 'search_eurlex',
-        description: 'Search EUR-Lex for AI Act related documents',
-        inputSchema: {
-          type: 'object',
-          properties: {
-            query: { type: 'string' },
-            dateFrom: { type: 'string', format: 'date' },
-            dateTo: { type: 'string', format: 'date' },
-            documentTypes: { type: 'array', items: { type: 'string' } },
-          },
-          required: ['query'],
-        },
+export class EURLexMCPServer extends BaseMCPServer {
+  constructor() {
+    super({
+      name: 'eurlex-ai-act-monitor',
+      version: '1.0.0',
+      description: 'MCP Server for EUR-Lex AI Act monitoring',
+      endpoint: 'https://eur-lex.europa.eu',
+      capabilities: {
+        resources: true,
+        tools: true,
+        prompts: false,
       },
-      {
-        name: 'fetch_document',
-        description: 'Fetch full legal document from EUR-Lex',
-        inputSchema: {
-          type: 'object',
-          properties: {
-            celex: { type: 'string' },
-            language: { type: 'string', default: 'FR' },
-          },
-          required: ['celex'],
-        },
-      },
-      {
-        name: 'get_recent_ai_act_updates',
-        description: 'Get recent documents related to AI Act (Regulation 2024/1689)',
-        inputSchema: {
-          type: 'object',
-          properties: {
-            daysBack: { type: 'number', default: 7 },
-            includeAmendments: { type: 'boolean', default: true },
+      tools: [
+        {
+          name: 'search_eurlex',
+          description: 'Search EUR-Lex for AI Act related documents',
+          inputSchema: {
+            type: 'object',
+            properties: {
+              query: { type: 'string' },
+              dateFrom: { type: 'string', format: 'date' },
+              dateTo: { type: 'string', format: 'date' },
+              documentTypes: { type: 'array', items: { type: 'string' } },
+            },
+            required: ['query'],
           },
         },
-      },
-    ],
-  };
+        {
+          name: 'fetch_document',
+          description: 'Fetch full legal document from EUR-Lex',
+          inputSchema: {
+            type: 'object',
+            properties: {
+              celex: { type: 'string' },
+              language: { type: 'string', default: 'FR' },
+            },
+            required: ['celex'],
+          },
+        },
+        {
+          name: 'get_recent_ai_act_updates',
+          description: 'Get recent documents related to AI Act (Regulation 2024/1689)',
+          inputSchema: {
+            type: 'object',
+            properties: {
+              daysBack: { type: 'number', default: 7 },
+              includeAmendments: { type: 'boolean', default: true },
+            },
+          },
+        },
+      ],
+    });
+  }
 
   async searchEURLex(params: {
     query: string;
@@ -78,14 +80,8 @@ export class EURLexMCPServer {
         ...(params.dateTo && { 'DD_year-to': params.dateTo }),
       });
 
-      const response = await axios.get(`${searchUrl}?${searchParams.toString()}`, {
-        headers: {
-          'User-Agent': 'AI-Act-Navigator/1.0 (Compliance Monitoring)',
-        },
-        timeout: 30000,
-      });
-
-      const $ = cheerio.load(response.data);
+      const html = await this.fetchHTML(`${searchUrl}?${searchParams.toString()}`);
+      const $ = this.parseHTML(html);
       const results: RawRegulatoryData[] = [];
 
       // Parse search results
@@ -124,15 +120,8 @@ export class EURLexMCPServer {
   async fetchDocument(celex: string, language: string = 'FR'): Promise<RawRegulatoryData | null> {
     try {
       const docUrl = `https://eur-lex.europa.eu/legal-content/${language}/TXT/?uri=CELEX:${celex}`;
-
-      const response = await axios.get(docUrl, {
-        headers: {
-          'User-Agent': 'AI-Act-Navigator/1.0 (Compliance Monitoring)',
-        },
-        timeout: 30000,
-      });
-
-      const $ = cheerio.load(response.data);
+      const html = await this.fetchHTML(docUrl);
+      const $ = this.parseHTML(html);
 
       const title = $('h1.title').first().text().trim() ||
                     $('.titreFichier').first().text().trim();
@@ -174,7 +163,6 @@ export class EURLexMCPServer {
         language: 'FR',
         metadata: {
           celex: '32024R1689',
-          official: true,
         },
       },
       {
@@ -184,11 +172,10 @@ export class EURLexMCPServer {
         title: 'Acte délégué - Normes harmonisées pour les systèmes d\'IA à haut risque',
         rawContent: 'Publication des normes techniques harmonisées pour l\'évaluation de la conformité des systèmes d\'IA à haut risque au titre de l\'article 40 du règlement IA. Entrée en vigueur prévue: 1er août 2025.',
         publishedDate: new Date(), // Today - updated recently
-        documentType: 'delegated_act',
+        documentType: 'decision',
         language: 'FR',
         metadata: {
           celex: 'C(2024)9638',
-          official: true,
         },
       },
       {
@@ -198,11 +185,10 @@ export class EURLexMCPServer {
         title: 'Acte d\'exécution - Documentation technique pour systèmes IA',
         rawContent: 'Spécifications techniques concernant la documentation à fournir par les fournisseurs de systèmes d\'IA à haut risque conformément à l\'annexe IV du règlement IA.',
         publishedDate: new Date(Date.now() - 5 * 24 * 60 * 60 * 1000), // 5 days ago
-        documentType: 'implementing_act',
+        documentType: 'decision',
         language: 'FR',
         metadata: {
           celex: 'C(2024)8456',
-          official: true,
         },
       },
       {
@@ -216,7 +202,6 @@ export class EURLexMCPServer {
         language: 'FR',
         metadata: {
           celex: '52024XC1234',
-          official: true,
         },
       },
     ];
@@ -234,33 +219,10 @@ export class EURLexMCPServer {
     return match ? match[1] : undefined;
   }
 
-  private parseDate(dateStr: string): Date {
-    // EUR-Lex uses various date formats, try to parse
-    const parsed = new Date(dateStr);
-    return isNaN(parsed.getTime()) ? new Date() : parsed;
-  }
-
-  private mapDocumentType(docType: string): any {
-    const mapping: Record<string, any> = {
-      'règlement': 'regulation',
-      'directive': 'directive',
-      'décision': 'decision',
-      'recommandation': 'guidance',
-      'communication': 'guidance',
-      'orientation': 'guidance',
-    };
-
-    for (const [key, value] of Object.entries(mapping)) {
-      if (docType.includes(key)) {
-        return value;
-      }
-    }
-
-    return 'regulation';
-  }
-
-  getConfig(): MCPServerConfig {
-    return this.config;
+  // Implementation of abstract method from BaseMCPServer
+  async fetchRecentUpdates(params?: Record<string, any>): Promise<RawRegulatoryData[]> {
+    const daysBack = params?.daysBack || 7;
+    return this.getRecentAIActUpdates(daysBack);
   }
 }
 

@@ -4,53 +4,54 @@
  */
 
 import { MCPServerConfig, RawRegulatoryData } from '../types/regulatory-monitoring';
-import axios from 'axios';
-import * as cheerio from 'cheerio';
+import { BaseMCPServer } from './BaseMCPServer';
 
-export class ECAIOfficeServer {
-  private config: MCPServerConfig = {
-    name: 'ec-ai-office-monitor',
-    version: '1.0.0',
-    description: 'MCP Server for European Commission AI Office monitoring',
-    endpoint: 'https://digital-strategy.ec.europa.eu',
-    capabilities: {
-      resources: true,
-      tools: true,
-      prompts: false,
-    },
-    tools: [
-      {
-        name: 'get_ai_office_updates',
-        description: 'Fetch latest updates from EC AI Office',
-        inputSchema: {
-          type: 'object',
-          properties: {
-            limit: { type: 'number', default: 10 },
+export class ECAIOfficeServer extends BaseMCPServer {
+  constructor() {
+    super({
+      name: 'ec-ai-office-monitor',
+      version: '1.0.0',
+      description: 'MCP Server for European Commission AI Office monitoring',
+      endpoint: 'https://digital-strategy.ec.europa.eu',
+      capabilities: {
+        resources: true,
+        tools: true,
+        prompts: false,
+      },
+      tools: [
+        {
+          name: 'get_ai_office_updates',
+          description: 'Fetch latest updates from EC AI Office',
+          inputSchema: {
+            type: 'object',
+            properties: {
+              limit: { type: 'number', default: 10 },
+            },
           },
         },
-      },
-      {
-        name: 'get_codes_of_conduct',
-        description: 'Retrieve AI codes of conduct and guidelines',
-        inputSchema: {
-          type: 'object',
-          properties: {
-            topic: { type: 'string' },
+        {
+          name: 'get_codes_of_conduct',
+          description: 'Retrieve AI codes of conduct and guidelines',
+          inputSchema: {
+            type: 'object',
+            properties: {
+              topic: { type: 'string' },
+            },
           },
         },
-      },
-      {
-        name: 'get_ai_board_decisions',
-        description: 'Get European AI Board decisions and opinions',
-        inputSchema: {
-          type: 'object',
-          properties: {
-            daysBack: { type: 'number', default: 30 },
+        {
+          name: 'get_ai_board_decisions',
+          description: 'Get European AI Board decisions and opinions',
+          inputSchema: {
+            type: 'object',
+            properties: {
+              daysBack: { type: 'number', default: 30 },
+            },
           },
         },
-      },
-    ],
-  };
+      ],
+    });
+  }
 
   async getAIOfficeUpdates(limit: number = 10): Promise<RawRegulatoryData[]> {
     // EC AI Office site uses dynamic content, so we use official known documents
@@ -66,7 +67,6 @@ export class ECAIOfficeServer {
         language: 'FR',
         metadata: {
           keywords: ['AI Office', 'Commission Européenne', 'EU AI Act'],
-          official: true,
         },
       },
       {
@@ -80,7 +80,6 @@ export class ECAIOfficeServer {
         language: 'FR',
         metadata: {
           keywords: ['gouvernance', 'surveillance', 'autorités nationales'],
-          official: true,
         },
       },
       {
@@ -94,7 +93,6 @@ export class ECAIOfficeServer {
         language: 'FR',
         metadata: {
           keywords: ['AI Pact', 'engagements volontaires', 'adoption précoce'],
-          official: true,
         },
       },
     ];
@@ -115,7 +113,6 @@ export class ECAIOfficeServer {
         language: 'FR',
         metadata: {
           keywords: ['code of conduct', 'GPAI', 'modèles fondation'],
-          official: true,
         },
       },
       {
@@ -129,7 +126,6 @@ export class ECAIOfficeServer {
         language: 'FR',
         metadata: {
           keywords: ['risques systémiques', 'GPAI', 'Article 55'],
-          official: true,
         },
       },
     ];
@@ -157,7 +153,6 @@ export class ECAIOfficeServer {
         language: 'FR',
         metadata: {
           keywords: ['AI Board', 'Article 65', 'gouvernance'],
-          official: true,
         },
       },
       {
@@ -171,7 +166,6 @@ export class ECAIOfficeServer {
         language: 'FR',
         metadata: {
           keywords: ['bacs à sable', 'Article 57', 'innovation'],
-          official: true,
         },
       },
     ];
@@ -182,13 +176,10 @@ export class ECAIOfficeServer {
     return boardDecisions.filter(doc => doc.publishedDate >= cutoffDate);
   }
 
-  private parseDate(dateStr: string): Date {
-    const parsed = new Date(dateStr);
-    return isNaN(parsed.getTime()) ? new Date() : parsed;
-  }
-
-  getConfig(): MCPServerConfig {
-    return this.config;
+  // Implementation of abstract method from BaseMCPServer
+  async fetchRecentUpdates(params?: Record<string, any>): Promise<RawRegulatoryData[]> {
+    const limit = params?.limit || 10;
+    return this.getAIOfficeUpdates(limit);
   }
 }
 

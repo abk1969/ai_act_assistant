@@ -4,68 +4,62 @@
  */
 
 import { MCPServerConfig, RawRegulatoryData } from '../types/regulatory-monitoring';
-import axios from 'axios';
+import { BaseMCPServer } from './BaseMCPServer';
 import * as cheerio from 'cheerio';
 
-export class CNILMCPServer {
-  private config: MCPServerConfig = {
-    name: 'cnil-ai-monitor',
-    version: '1.0.0',
-    description: 'MCP Server for CNIL AI and GDPR monitoring',
-    endpoint: 'https://www.cnil.fr',
-    capabilities: {
-      resources: true,
-      tools: true,
-      prompts: false,
-    },
-    tools: [
-      {
-        name: 'get_cnil_ai_news',
-        description: 'Fetch latest AI-related news from CNIL',
-        inputSchema: {
-          type: 'object',
-          properties: {
-            limit: { type: 'number', default: 10 },
+export class CNILMCPServer extends BaseMCPServer {
+  constructor() {
+    super({
+      name: 'cnil-ai-monitor',
+      version: '1.0.0',
+      description: 'MCP Server for CNIL AI and GDPR monitoring',
+      endpoint: 'https://www.cnil.fr',
+      capabilities: {
+        resources: true,
+        tools: true,
+        prompts: false,
+      },
+      tools: [
+        {
+          name: 'get_cnil_ai_news',
+          description: 'Fetch latest AI-related news from CNIL',
+          inputSchema: {
+            type: 'object',
+            properties: {
+              limit: { type: 'number', default: 10 },
+            },
           },
         },
-      },
-      {
-        name: 'get_cnil_recommendations',
-        description: 'Get CNIL recommendations on AI and data protection',
-        inputSchema: {
-          type: 'object',
-          properties: {
-            topic: { type: 'string' },
+        {
+          name: 'get_cnil_recommendations',
+          description: 'Get CNIL recommendations on AI and data protection',
+          inputSchema: {
+            type: 'object',
+            properties: {
+              topic: { type: 'string' },
+            },
           },
         },
-      },
-      {
-        name: 'check_cnil_sanctions',
-        description: 'Check for recent CNIL sanctions related to AI',
-        inputSchema: {
-          type: 'object',
-          properties: {
-            daysBack: { type: 'number', default: 30 },
+        {
+          name: 'check_cnil_sanctions',
+          description: 'Check for recent CNIL sanctions related to AI',
+          inputSchema: {
+            type: 'object',
+            properties: {
+              daysBack: { type: 'number', default: 30 },
+            },
           },
         },
-      },
-    ],
-  };
+      ],
+    });
+  }
 
   async getCNILAINews(limit: number = 10): Promise<RawRegulatoryData[]> {
     try {
       // CNIL AI-related news page
       const newsUrl = 'https://www.cnil.fr/fr/intelligence-artificielle';
-
-      const response = await axios.get(newsUrl, {
-        headers: {
-          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
-          'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
-        },
-        timeout: 30000,
-      });
-
-      const $ = cheerio.load(response.data);
+      const html = await this.fetchHTML(newsUrl);
+      const $ = this.parseHTML(html);
       const results: RawRegulatoryData[] = [];
 
       // Parse items from the view container
@@ -87,7 +81,6 @@ export class CNILMCPServer {
             language: 'FR',
             metadata: {
               keywords: ['CNIL', 'protection des données', 'IA'],
-              source: 'cnil-ai-page',
             },
           });
         }
@@ -104,16 +97,8 @@ export class CNILMCPServer {
     try {
       // Same source as news - CNIL doesn't separate recommendations from news on their AI page
       const aiPageUrl = 'https://www.cnil.fr/fr/intelligence-artificielle';
-
-      const response = await axios.get(aiPageUrl, {
-        headers: {
-          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
-          'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
-        },
-        timeout: 30000,
-      });
-
-      const $ = cheerio.load(response.data);
+      const html = await this.fetchHTML(aiPageUrl);
+      const $ = this.parseHTML(html);
       const results: RawRegulatoryData[] = [];
 
       // Parse items from the view container
@@ -146,7 +131,6 @@ export class CNILMCPServer {
             language: 'FR',
             metadata: {
               keywords: topic ? [topic, 'CNIL', 'IA', 'recommandation'] : ['CNIL', 'IA', 'recommandation'],
-              source: 'cnil-recommendations',
             },
           });
         }
@@ -164,16 +148,8 @@ export class CNILMCPServer {
     try {
       // Check the AI page for sanction mentions
       const aiNewsUrl = 'https://www.cnil.fr/fr/intelligence-artificielle';
-
-      const response = await axios.get(aiNewsUrl, {
-        headers: {
-          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
-          'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
-        },
-        timeout: 30000,
-      });
-
-      const $ = cheerio.load(response.data);
+      const html = await this.fetchHTML(aiNewsUrl);
+      const $ = this.parseHTML(html);
       const results: RawRegulatoryData[] = [];
 
       // Look for sanction-related items in the views
@@ -203,7 +179,6 @@ export class CNILMCPServer {
             language: 'FR',
             metadata: {
               keywords: ['sanction', 'IA', 'CNIL'],
-              source: 'cnil-sanctions',
             },
           });
         }
@@ -217,7 +192,8 @@ export class CNILMCPServer {
     }
   }
 
-  private parseDate(dateStr: string): Date {
+  // Override base class parseDate to handle French date formats
+  protected parseDate(dateStr: string): Date {
     // Try to parse French date format
     const frenchMonths: Record<string, number> = {
       'janvier': 0, 'février': 1, 'mars': 2, 'avril': 3,
@@ -239,8 +215,10 @@ export class CNILMCPServer {
     return isNaN(parsed.getTime()) ? new Date() : parsed;
   }
 
-  getConfig(): MCPServerConfig {
-    return this.config;
+  // Implementation of abstract method from BaseMCPServer
+  async fetchRecentUpdates(params?: Record<string, any>): Promise<RawRegulatoryData[]> {
+    const limit = params?.limit || 10;
+    return this.getCNILAINews(limit);
   }
 }
 
